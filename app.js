@@ -359,6 +359,7 @@ function selectTarget(id) {
     cropper.setData(cropFor(p, t));
     suppressCrop = false;
     updateCropColor();
+    drawCropOverlay();
   }
   updateMeta();
 }
@@ -415,11 +416,38 @@ function mountCropper() {
     ready() {
       cropper.setData(cropFor(photo, byId(state.activeTarget)));
       suppressCrop = false;
+      mountCropOverlay();
       updateCropColor();
       updateMeta();
     },
     crop: onCrop,
   });
+}
+
+/*
+ * Read-only preview of the overlays inside the crop box, so the crop can be
+ * framed around them. It sits under Cropper's drag surface and ignores input.
+ */
+let cropOverlay = null;
+function mountCropOverlay() {
+  const box = $('stage').querySelector('.cropper-crop-box');
+  if (!box) return;
+  cropOverlay = document.createElement('canvas');
+  cropOverlay.className = 'crop-overlay';
+  box.querySelector('.cropper-view-box').after(cropOverlay);
+  drawCropOverlay();
+}
+
+function drawCropOverlay() {
+  const p = state.activePhoto;
+  if (!cropper || !cropOverlay || !cropOverlay.isConnected || !p) return;
+  const { width, height } = cropper.getCropBoxData();
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.max(1, Math.round(width * dpr)), H = Math.max(1, Math.round(height * dpr));
+  if (cropOverlay.width !== W || cropOverlay.height !== H) { cropOverlay.width = W; cropOverlay.height = H; }
+  const ctx = cropOverlay.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  drawLayers(ctx, p.layers, W, H, state.activeTarget);
 }
 
 function updateCropColor() {
@@ -444,6 +472,7 @@ function onCrop() {
       rafPending = false;
       drawTabPreview(p, t);
       for (const o of linked) drawTabPreview(p, o);
+      drawCropOverlay();
       updateMeta();
     });
   }
