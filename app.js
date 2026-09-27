@@ -364,13 +364,22 @@ function renderPhotos() {
   const list = $('photoList');
   list.innerHTML = '';
   for (const p of state.photos) {
+    const item = document.createElement('div');
+    item.className = 'thumb-item';
     const b = document.createElement('button');
     b.className = 'thumb-btn' + (p === state.activePhoto ? ' active' : '');
     b.title = p.name;
+    item.appendChild(b);
     if (p.loading) {
       b.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
       b.disabled = true;
     } else {
+      const del = document.createElement('button');
+      del.className = 'thumb-del';
+      del.title = p.kind === 'collage' ? 'Delete collage' : 'Delete photo';
+      del.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+      del.addEventListener('click', () => removeItem(p));
+      item.appendChild(del);
       const img = document.createElement('img');
       img.src = p.thumb;
       img.alt = p.name;
@@ -381,7 +390,7 @@ function renderPhotos() {
       }
       b.addEventListener('click', () => selectPhoto(p));
     }
-    list.appendChild(b);
+    list.appendChild(item);
   }
 }
 
@@ -638,20 +647,36 @@ $('resetBtn').addEventListener('click', () => {
   cropper.setData(autoCrop(p, t));
 });
 
-$('removeBtn').addEventListener('click', () => {
-  const p = state.activePhoto;
-  if (!p) return;
+$('removeBtn').addEventListener('click', () => { if (state.activePhoto) removeItem(state.activePhoto); });
+
+// Collages hold direct references to their source photos, so deleting a
+// source from the list leaves the collage intact. A photo's object URL is only
+// released once nothing (list or collage) uses it any more.
+function inUse(photo) {
+  return state.photos.includes(photo) || state.photos.some(c => c.kind === 'collage' && c.sources.includes(photo));
+}
+
+function releaseImages(p) {
+  for (const x of p.kind === 'collage' ? p.sources : [p]) {
+    if (x.url && !inUse(x)) { URL.revokeObjectURL(x.url); x.url = null; }
+  }
+}
+
+function removeItem(p) {
   const idx = state.photos.indexOf(p);
+  if (idx < 0) return;
   state.photos.splice(idx, 1);
-  if (p.url) URL.revokeObjectURL(p.url);
-  const ready = state.photos.filter(x => !x.loading);
-  const next = ready[Math.min(idx, ready.length - 1)];
-  state.activePhoto = null;
-  if (next) selectPhoto(next);
-  else if (!state.photos.length) showDrop();
+  releaseImages(p);
+  if (state.activePhoto === p) {
+    const ready = state.photos.filter(x => !x.loading);
+    const next = ready[Math.min(idx, ready.length - 1)];
+    state.activePhoto = null;
+    if (next) selectPhoto(next);
+    else if (!state.photos.length) showDrop();
+  }
   renderPhotos();
   renderSummary();
-});
+}
 
 /* ---------------- Layer rendering (shared by preview and export) ---------------- */
 /*
