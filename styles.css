@@ -241,6 +241,7 @@ main {
 .chip:not(.on):hover { opacity: 1; }
 
 .switch {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;

@@ -1029,7 +1029,19 @@ function renderPanel() {
     });
     list.appendChild(row);
   });
+  // Rebuilding the props wipes their scroll position (and briefly the page
+  // height on mobile); keep both when the same layer is re-rendered.
+  const props = $('props');
+  const sameLayer = props.dataset.layer === String(state.sel?.id);
+  const scrollTop = props.scrollTop, winY = window.scrollY;
+  props.style.minHeight = sameLayer ? props.offsetHeight + 'px' : '';
   renderProps();
+  props.dataset.layer = String(state.sel?.id);
+  props.style.minHeight = '';
+  if (sameLayer) {
+    props.scrollTop = scrollTop;
+    if (window.scrollY !== winY) window.scrollTo(0, winY);
+  }
   $('copyAllBtn').disabled = !p.layers.length;
 }
 
