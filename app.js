@@ -262,6 +262,7 @@ function syncAngleUI() {
   angleInput.value = a;
   $('angleVal').textContent = `${a.toFixed(1)}°`;
   $('straighten').classList.toggle('changed', a !== 0);
+  $('angleReset').disabled = a === 0;
 }
 
 let angleQueue = Promise.resolve();
@@ -288,7 +289,9 @@ angleInput.addEventListener('input', () => {
   drawStraightenPreview(p, a);
 });
 angleInput.addEventListener('change', () => commitAngle(parseFloat(angleInput.value)));
-$('straighten').addEventListener('dblclick', () => { angleInput.value = 0; commitAngle(0); });
+const resetAngle = () => { angleInput.value = 0; commitAngle(0); };
+$('angleReset').addEventListener('click', resetAngle);
+angleInput.addEventListener('dblclick', resetAngle);
 
 function autoCrop(photo, t) {
   const W = photo.w, H = photo.h;

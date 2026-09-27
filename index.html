@@ -188,11 +188,14 @@
           <div class="editor-foot">
             <span class="meta" id="meta"></span>
             <div class="foot-actions">
-              <label class="straighten" id="straighten" title="Straighten (double-click to reset)">
-                <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 17 21 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".45"/></svg>
-                <input type="range" id="angleInput" min="-45" max="45" step="0.1" value="0" aria-label="Straighten angle">
+              <div class="straighten" id="straighten">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 17 21 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".45"/></svg>
+                <input type="range" id="angleInput" min="-45" max="45" step="0.1" value="0" aria-label="Straighten angle" title="Straighten">
                 <span id="angleVal">0.0°</span>
-              </label>
+                <button class="mini" id="angleReset" title="Reset straighten" aria-label="Reset straighten" disabled>
+                  <svg viewBox="0 0 24 24" width="14" height="14"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
               <button class="btn ghost sm" id="resetBtn" title="Back to the automatic crop">Reset crop</button>
               <button class="btn ghost sm danger" id="removeBtn" title="Delete this item from the set">Delete</button>
             </div>

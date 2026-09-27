@@ -655,6 +655,8 @@ main {
 }
 .straighten input { width: 140px; accent-color: var(--accent); }
 .straighten span { min-width: 40px; text-align: right; }
+.straighten { padding-right: 4px; }
+.straighten .mini:disabled { opacity: .3; cursor: default; background: none; }
 .straighten.changed { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .straighten-preview {
   position: absolute;
