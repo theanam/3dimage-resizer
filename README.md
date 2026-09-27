@@ -4,6 +4,8 @@ Crop and resize photos for **Thingiverse**, **Printables** and **MakerWorld** in
 
 **Live:** https://theanam.github.io/3dimage-resizer/
 
+![Screenshot](docs/screenshot.png)
+
 - Opens JPG, PNG, WebP and HEIC
 - Pick which sites and variants you need; each gets an auto crop you can adjust
 - Exports a zip of JPEGs (quality 88, max 1600px on the long edge, never upscaled)
