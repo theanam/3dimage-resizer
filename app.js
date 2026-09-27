@@ -302,6 +302,7 @@ function renderTabs() {
     txt.className = 'vt-text';
     txt.innerHTML = `<span class="vt-site"><i class="dot" style="--c:${t.color}"></i>${t.site}</span><span class="vt-sub">${t.label} · ${t.rw}:${t.rh}</span>`;
     b.appendChild(txt);
+    b.title = `${t.site} ${t.label.toLowerCase()} · ${t.rw}:${t.rh}`;
     b.addEventListener('click', () => selectTarget(t.id));
     wrap.appendChild(b);
     if (p && !p.loading) drawTabPreview(p, t, c);
@@ -720,16 +721,16 @@ const EFFECT_DEFAULTS = {
 };
 
 const PRESETS = [
-  { name: 'Plain', css: 'color:#fff', set: { outline: false, shadow: false, d3: false, box: false } },
-  { name: 'Outline', css: 'color:#fff;-webkit-text-stroke:3px #000;paint-order:stroke fill',
+  { name: 'Plain (no effects)', css: 'color:#fff', set: { outline: false, shadow: false, d3: false, box: false } },
+  { name: 'Outline style', css: 'color:#fff;-webkit-text-stroke:3px #000;paint-order:stroke fill',
     set: { color: '#ffffff', outline: true, outlineColor: '#000000', outlineWidth: 0.08, shadow: false, d3: false, box: false } },
-  { name: 'Shadow', css: 'color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.7)',
+  { name: 'Soft shadow', css: 'color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.7)',
     set: { outline: false, shadow: true, shadowColor: '#000000', shadowAlpha: 0.6, shadowBlur: 0.18, shadowDist: 0.06, shadowAngle: 90, d3: false, box: false } },
-  { name: '3D', css: 'color:#fff;text-shadow:1px 1px 0 #00ae42,2px 2px 0 #00ae42,3px 3px 0 #00ae42,4px 4px 0 #00ae42',
+  { name: '3D extrude', css: 'color:#fff;text-shadow:1px 1px 0 #00ae42,2px 2px 0 #00ae42,3px 3px 0 #00ae42,4px 4px 0 #00ae42',
     set: { color: '#ffffff', outline: false, d3: true, d3Color: '#00ae42', d3Depth: 0.09, d3Angle: 45, shadow: true, shadowColor: '#000000', shadowAlpha: 0.35, shadowBlur: 0.2, shadowDist: 0.08, shadowAngle: 60, box: false } },
-  { name: 'Neon', css: 'color:#fff;text-shadow:0 0 4px #ff3df0,0 0 10px #ff3df0',
+  { name: 'Neon glow', css: 'color:#fff;text-shadow:0 0 4px #ff3df0,0 0 10px #ff3df0',
     set: { color: '#ffffff', outline: true, outlineColor: '#ff3df0', outlineWidth: 0.025, shadow: true, shadowColor: '#ff3df0', shadowAlpha: 1, shadowBlur: 0.45, shadowDist: 0, d3: false, box: false } },
-  { name: 'Box', css: 'color:#fff;background:#000;border-radius:5px;padding:2px 6px;font-size:13px',
+  { name: 'Background box', css: 'color:#fff;background:#000;border-radius:5px;padding:2px 6px;font-size:13px',
     set: { outline: false, shadow: false, d3: false, box: true, boxColor: '#000000', boxAlpha: 0.65 } },
 ];
 
@@ -1042,6 +1043,7 @@ function renderPanel() {
   [...p.layers].reverse().forEach(l => {
     const row = document.createElement('div');
     row.className = 'layer-row' + (l === state.sel ? ' on' : '');
+    row.title = (l.type === 'text' ? 'Text: ' : 'Image: ') + layerLabel(l);
     const icon = l.type === 'text'
       ? `<span class="lr-icon" style="font-family:${esc(fontCss(l.font))}">T</span>`
       : `<span class="lr-icon"><img src="${l.url}" alt=""></span>`;
@@ -1103,7 +1105,7 @@ function slider(l, key, label, min, max, step) {
     else l[key] = v;
     onLayerChange(l);
   });
-  return el('label', { class: 'slider' }, [el('span', {}, label), input]);
+  return el('label', { class: 'slider', title: label }, [el('span', {}, label), input]);
 }
 
 function linkRow(l) {
@@ -1138,14 +1140,14 @@ function toggleBtn(l, key, html, title) {
   });
 }
 
-function fxSection(l, key, label, colorKey, sliders) {
-  const sw = el('label', { class: 'switch' }, [
+function fxSection(l, key, label, colorKey, sliders, tip) {
+  const sw = el('label', { class: 'switch', title: tip }, [
     el('input', { type: 'checkbox', onchange: (e) => { l[key] = e.target.checked; onLayerChange(l, true); } }),
     el('span', { class: 'track', html: '<span class="thumb"></span>' }),
   ]);
   sw.querySelector('input').checked = !!l[key];
   return el('div', { class: 'fx' + (l[key] ? ' on' : '') }, [
-    el('div', { class: 'fx-head' }, [el('span', { class: 'grow' }, label), colorInput(l, colorKey, label + ' color'), sw]),
+    el('div', { class: 'fx-head' }, [el('span', { class: 'grow', title: tip }, label), colorInput(l, colorKey, label + ' color'), sw]),
     el('div', { class: 'fx-body' }, sliders),
   ]);
 }
@@ -1165,7 +1167,7 @@ function renderProps() {
   }
 
   if (l.type === 'text') {
-    const ta = el('textarea', { rows: 2, spellcheck: 'false' });
+    const ta = el('textarea', { rows: 2, spellcheck: 'false', title: 'Text (Enter for a new line)' });
     ta.value = l.text;
     ta.addEventListener('input', () => {
       l.text = ta.value;
@@ -1221,23 +1223,23 @@ function renderProps() {
 
   props.append(fxSection(l, 'outline', 'Outline', 'outlineColor', [
     slider(l, 'outlineWidth', 'Width', 0.005, 0.25, 0.001),
-  ]));
+  ], 'Border around the edges'));
   props.append(fxSection(l, 'shadow', 'Shadow', 'shadowColor', [
     slider(l, 'shadowAlpha', 'Opacity', 0, 1, 0.01),
     slider(l, 'shadowBlur', 'Blur', 0, 1, 0.005),
     slider(l, 'shadowDist', 'Distance', 0, 0.6, 0.005),
     slider(l, 'shadowAngle', 'Angle', 0, 360, 1),
-  ]));
+  ], 'Drop shadow. Blur 0 = hard shadow, distance 0 = glow'));
   props.append(fxSection(l, 'd3', '3D', 'd3Color', [
     slider(l, 'd3Depth', 'Depth', 0.005, 0.5, 0.001),
     slider(l, 'd3Angle', 'Angle', 0, 360, 1),
-  ]));
+  ], 'Solid 3D extrusion'));
   if (l.type === 'text') {
     props.append(fxSection(l, 'box', 'Background', 'boxColor', [
       slider(l, 'boxAlpha', 'Opacity', 0.05, 1, 0.01),
       slider(l, 'boxPad', 'Padding', 0, 1.5, 0.01),
       slider(l, 'boxRadius', 'Radius', 0, 1, 0.01),
-    ]));
+    ], 'Filled box behind the text'));
   }
 }
 
@@ -1340,5 +1342,52 @@ window.addEventListener('drop', (e) => {
   $('dropzone').classList.remove('over');
   if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
 });
+
+/* ---------------- Tooltips ---------------- */
+/*
+ * Native title tooltips are slow and easy to miss, so any element with a
+ * title gets a quick custom one instead (the title moves to data-tip to
+ * avoid showing both).
+ */
+const tip = document.createElement('div');
+tip.className = 'tip';
+tip.hidden = true;
+document.body.appendChild(tip);
+let tipTimer, tipEl = null;
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  tip.hidden = true;
+  tipEl = null;
+}
+
+document.addEventListener('pointerover', (e) => {
+  if (e.pointerType === 'touch') return;
+  const t = e.target.closest?.('[title], [data-tip]');
+  if (t === tipEl) return;
+  hideTip();
+  if (!t || t.tagName === 'HTML') return;
+  if (t.hasAttribute('title')) {
+    t.dataset.tip = t.getAttribute('title');
+    if (!t.hasAttribute('aria-label')) t.setAttribute('aria-label', t.dataset.tip);
+    t.removeAttribute('title');
+  }
+  if (!t.dataset.tip) return;
+  tipEl = t;
+  tipTimer = setTimeout(() => {
+    if (!t.isConnected) return;
+    tip.textContent = t.dataset.tip;
+    tip.hidden = false;
+    const r = t.getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let x = clamp(r.left + r.width / 2 - tw / 2, 8, innerWidth - tw - 8);
+    let y = r.top - th - 8;
+    if (y < 8) y = r.bottom + 8;
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  }, 250);
+});
+document.addEventListener('pointerdown', hideTip, true);
+document.addEventListener('scroll', hideTip, true);
 
 renderTargets();

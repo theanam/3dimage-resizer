@@ -717,6 +717,23 @@ main {
   max-width: calc(100% - 32px);
 }
 
+.tip {
+  position: fixed;
+  z-index: 100;
+  max-width: 240px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  animation: tip-in .12s ease-out;
+}
+@keyframes tip-in { from { opacity: 0; transform: translateY(3px); } }
+
 /* ---------- Dialog ---------- */
 .dialog {
   border: 1px solid var(--line);
