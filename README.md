@@ -2,7 +2,7 @@
 
 Crop and resize photos for **Thingiverse**, **Printables** and **MakerWorld** in one go. It runs entirely in the browser, so nothing gets uploaded.
 
-**Live:** https://theanam.github.io/3dimage-resizer/
+**Live:** https://theanam.github.io/3dsubmit-resizer/
 
 ![Screenshot](docs/screenshot.png)
 
@@ -29,4 +29,4 @@ python3 -m http.server
 
 Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
 
-Feature requests: [issues](https://github.com/theanam/3dimage-resizer/issues) · Feedback: anam.ahmed.a@gmail.com
+Feature requests: [issues](https://github.com/theanam/3dsubmit-resizer/issues) · Feedback: anam.ahmed.a@gmail.com
