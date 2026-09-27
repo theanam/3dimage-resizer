@@ -585,6 +585,8 @@ main {
   border-radius: 9px;
   padding: 8px 10px;
 }
+@keyframes flash { 0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 60%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.props textarea.flash { animation: flash .8s ease-out; }
 .props textarea { resize: vertical; min-height: 58px; line-height: 1.35; }
 .props textarea:focus, .props select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); border-color: var(--accent); }
 .prow { display: flex; align-items: center; gap: 6px; }
@@ -615,18 +617,41 @@ main {
 .swatch::-moz-color-swatch { border: 0; border-radius: 6px; }
 .slider { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .slider input { width: 100%; accent-color: var(--accent); }
-.presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .preset {
-  height: 38px;
+  height: 44px;
+  width: 100%;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 9px;
+  overflow: hidden;
   background: #50555e;
   cursor: pointer;
-  font: 800 17px/1 system-ui, sans-serif;
-  color: #fff;
-  display: grid; place-items: center;
+  display: grid;
+  place-items: center;
 }
+.preset canvas { display: block; width: 100%; height: 100%; object-fit: cover; }
 .preset:hover { border-color: var(--accent); }
+.save-tile { background: transparent; border-style: dashed; color: var(--muted); }
+.save-tile:hover { color: var(--accent); }
+.preset-wrap { position: relative; }
+.p-del {
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .7);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.preset-wrap:hover .p-del, .p-del:focus-visible { opacity: 1; }
+.p-del:hover { background: var(--danger); }
+@media (hover: none) { .p-del { opacity: 1; } }
 .fx { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .fx-head {
   display: flex; align-items: center; gap: 8px;

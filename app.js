@@ -1027,18 +1027,26 @@ const EFFECT_DEFAULTS = {
   box: false, boxColor: '#000000', boxAlpha: 0.6, boxPad: 0.35, boxRadius: 0.25,
 };
 
+// Built-in text styles. Each one sets every effect toggle so styles never
+// leave leftovers from the previous one; none of them changes the font.
+const preset = (name, set) => ({ name, set: { outline: false, shadow: false, d3: false, box: false, ...set } });
 const PRESETS = [
-  { name: 'Plain (no effects)', css: 'color:#fff', set: { outline: false, shadow: false, d3: false, box: false } },
-  { name: 'Outline style', css: 'color:#fff;-webkit-text-stroke:3px #000;paint-order:stroke fill',
-    set: { color: '#ffffff', outline: true, outlineColor: '#000000', outlineWidth: 0.08, shadow: false, d3: false, box: false } },
-  { name: 'Soft shadow', css: 'color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.7)',
-    set: { outline: false, shadow: true, shadowColor: '#000000', shadowAlpha: 0.6, shadowBlur: 0.18, shadowDist: 0.06, shadowAngle: 90, d3: false, box: false } },
-  { name: '3D extrude', css: 'color:#fff;text-shadow:1px 1px 0 #00ae42,2px 2px 0 #00ae42,3px 3px 0 #00ae42,4px 4px 0 #00ae42',
-    set: { color: '#ffffff', outline: false, d3: true, d3Color: '#00ae42', d3Depth: 0.09, d3Angle: 45, shadow: true, shadowColor: '#000000', shadowAlpha: 0.35, shadowBlur: 0.2, shadowDist: 0.08, shadowAngle: 60, box: false } },
-  { name: 'Neon glow', css: 'color:#fff;text-shadow:0 0 4px #ff3df0,0 0 10px #ff3df0',
-    set: { color: '#ffffff', outline: true, outlineColor: '#ff3df0', outlineWidth: 0.025, shadow: true, shadowColor: '#ff3df0', shadowAlpha: 1, shadowBlur: 0.45, shadowDist: 0, d3: false, box: false } },
-  { name: 'Background box', css: 'color:#fff;background:#000;border-radius:5px;padding:2px 6px;font-size:13px',
-    set: { outline: false, shadow: false, d3: false, box: true, boxColor: '#000000', boxAlpha: 0.65 } },
+  preset('Plain', {}),
+  preset('Outline', { color: '#ffffff', outline: true, outlineColor: '#000000', outlineWidth: 0.08 }),
+  preset('Bold outline', { color: '#ffffff', bold: true, outline: true, outlineColor: '#000000', outlineWidth: 0.13 }),
+  preset('Soft shadow', { shadow: true, shadowColor: '#000000', shadowAlpha: 0.6, shadowBlur: 0.18, shadowDist: 0.06, shadowAngle: 90 }),
+  preset('Hard shadow', { shadow: true, shadowColor: '#000000', shadowAlpha: 1, shadowBlur: 0, shadowDist: 0.08, shadowAngle: 45 }),
+  preset('Long shadow', { d3: true, d3Color: '#1b1a18', d3Depth: 0.3, d3Angle: 45 }),
+  preset('3D extrude', { color: '#ffffff', d3: true, d3Color: '#00ae42', d3Depth: 0.09, d3Angle: 45, shadow: true, shadowColor: '#000000', shadowAlpha: 0.35, shadowBlur: 0.2, shadowDist: 0.08, shadowAngle: 60 }),
+  preset('Retro', { color: '#ffd23f', outline: true, outlineColor: '#1b1a18', outlineWidth: 0.05, d3: true, d3Color: '#e4572e', d3Depth: 0.1, d3Angle: 45 }),
+  preset('Gold', { color: '#f5c542', outline: true, outlineColor: '#7a4b00', outlineWidth: 0.03, d3: true, d3Color: '#7a4b00', d3Depth: 0.06, d3Angle: 90, shadow: true, shadowColor: '#000000', shadowAlpha: 0.4, shadowBlur: 0.2, shadowDist: 0.08, shadowAngle: 90 }),
+  preset('Pop', { color: '#ffffff', outline: true, outlineColor: '#1b1a18', outlineWidth: 0.04, d3: true, d3Color: '#248bfb', d3Depth: 0.07, d3Angle: 135 }),
+  preset('Neon pink', { color: '#ffffff', outline: true, outlineColor: '#ff3df0', outlineWidth: 0.025, shadow: true, shadowColor: '#ff3df0', shadowAlpha: 1, shadowBlur: 0.45, shadowDist: 0 }),
+  preset('Neon cyan', { color: '#e8fdff', outline: true, outlineColor: '#19e3ff', outlineWidth: 0.025, shadow: true, shadowColor: '#19e3ff', shadowAlpha: 1, shadowBlur: 0.45, shadowDist: 0 }),
+  preset('Sticker', { color: '#00ae42', outline: true, outlineColor: '#ffffff', outlineWidth: 0.14, shadow: true, shadowColor: '#000000', shadowAlpha: 0.35, shadowBlur: 0.15, shadowDist: 0.05, shadowAngle: 90 }),
+  preset('Dark box', { color: '#ffffff', box: true, boxColor: '#000000', boxAlpha: 0.65, boxRadius: 0.25 }),
+  preset('Light box', { color: '#151a17', box: true, boxColor: '#ffffff', boxAlpha: 0.9, boxRadius: 0.25 }),
+  preset('Label', { color: '#ffffff', box: true, boxColor: '#00ae42', boxAlpha: 1, boxRadius: 0.15 }),
 ];
 
 const TEXT_STYLE_KEYS = ['font', 'color', 'bold', 'italic', 'align', ...Object.keys(EFFECT_DEFAULTS)];
@@ -1218,6 +1226,7 @@ function hitTest(px, py) {
 }
 
 let drag = null;
+let lastTap = {};
 frame.addEventListener('pointerdown', (e) => {
   const p = state.activePhoto;
   if (!p) return;
@@ -1245,6 +1254,12 @@ frame.addEventListener('pointerdown', (e) => {
     drag = { type: 'resize', l, cx, cy, d0: Math.hypot(px - cx, py - cy) || 1, s0: pl.size };
   } else {
     const l = hitTest(px, py);
+    if (e.pointerType === 'touch' && l && lastTap.l === l && e.timeStamp - lastTap.t < 350) {
+      lastTap = {};
+      editLayerText(l);
+      return;
+    }
+    lastTap = { l, t: e.timeStamp };
     if (l !== state.sel) { state.sel = l; renderPanel(); }
     if (!l) { redraw(); return; }
     const pl = place(l, state.activeTarget);
@@ -1302,11 +1317,23 @@ function endDrag() {
 }
 frame.addEventListener('pointerup', endDrag);
 frame.addEventListener('pointercancel', endDrag);
-frame.addEventListener('dblclick', () => {
-  if (state.sel?.type === 'text') {
-    const ta = $('props').querySelector('textarea');
-    if (ta) { ta.focus(); ta.select(); }
-  }
+// Double-click (or double-tap) on a text layer jumps to its text box.
+function editLayerText(l) {
+  if (l?.type !== 'text') return;
+  if (state.sel !== l) { state.sel = l; renderPanel(); redraw(); }
+  const ta = $('props').querySelector('textarea');
+  if (!ta) return;
+  ta.scrollIntoView({ block: 'nearest' });
+  ta.focus();
+  ta.select();
+  ta.classList.remove('flash');
+  void ta.offsetWidth;
+  ta.classList.add('flash');
+}
+frame.addEventListener('dblclick', (e) => {
+  if (state.mode !== 'overlay') return;
+  const rect = frame.getBoundingClientRect();
+  editLayerText(hitTest(e.clientX - rect.left, e.clientY - rect.top) || state.sel);
 });
 
 function cellAt(rects, px, py) {
@@ -1489,7 +1516,7 @@ function openFontMenu(l, anchor) {
     anchor.querySelector('.fb-name').textContent = fontLabel(f);
     const icon = $('layerList').querySelector('.layer-row.on .lr-icon');
     if (icon) icon.style.fontFamily = fontCss(f);
-    onLayerChange(l);
+    onLayerChange(l, true);
   };
 
   if (canLoadAllFonts()) {
@@ -1547,6 +1574,7 @@ const GENERIC_LABELS = { 'system-ui': 'System UI', 'sans-serif': 'Sans-serif', s
 /* ---------------- Panel ---------------- */
 
 const ICONS = {
+  plus: '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   collage: '<svg viewBox="0 0 24 24" width="12" height="12"><rect x="3" y="3" width="8" height="18" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor"/></svg>',
   left: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   right: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1685,6 +1713,47 @@ function syncSizeSlider() {
   if (s && state.sel) s.value = place(state.sel, state.activeTarget).size;
 }
 
+/* ---------------- Text style presets ---------------- */
+
+const loadCustomPresets = () => store.get('customPresets', []);
+
+function saveCustomPreset(l) {
+  const list = loadCustomPresets();
+  const set = {};
+  for (const k of TEXT_STYLE_KEYS) set[k] = l[k];
+  const n = list.reduce((m, p) => Math.max(m, parseInt(p.name.replace(/\D+/g, ''), 10) || 0), 0) + 1;
+  list.push({ id: Date.now(), name: `Saved style ${n}`, set });
+  store.set('customPresets', list);
+  toast('Style saved in this browser');
+  renderPanel();
+}
+
+function deleteCustomPreset(id) {
+  store.set('customPresets', loadCustomPresets().filter(p => p.id !== id));
+  renderPanel();
+}
+
+// Tiles are rendered with the real layer renderer, using the layer's font.
+function presetTile(l, pr, custom) {
+  const W = 72, H = 44, dpr = window.devicePixelRatio || 1;
+  const c = el('canvas');
+  c.width = W * dpr;
+  c.height = H * dpr;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, c.height);
+  g.addColorStop(0, '#666c76');
+  g.addColorStop(1, '#3f444c');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, c.width, c.height);
+  const sample = { ...l, ...pr.set, text: 'Aa', x: 0.5, y: 0.5, opacity: 1, linked: true, pos: {}, align: 'center' };
+  sample.size = 0.42 * H / W;
+  drawLayer(ctx, sample, c.width, c.height, null);
+  const btn = el('button', { class: 'preset', title: pr.name, onclick: () => { Object.assign(l, pr.set); onLayerChange(l, true); } }, [c]);
+  if (!custom) return btn;
+  const del = el('button', { class: 'p-del', title: 'Delete saved style', html: '<svg viewBox="0 0 24 24" width="10" height="10"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>', onclick: () => deleteCustomPreset(pr.id) });
+  return el('div', { class: 'preset-wrap' }, [btn, del]);
+}
+
 function renderProps() {
   closeFontMenu(false);
   const props = $('props');
@@ -1721,8 +1790,14 @@ function renderProps() {
     props.append(slider(l, 'size', 'Size', 0.01, 0.4, 0.001));
     props.append(slider(l, 'opacity', 'Opacity', 0.05, 1, 0.01));
 
-    props.append(el('div', { class: 'presets' }, PRESETS.map(pr =>
-      el('button', { class: 'preset', title: pr.name, html: `<span style="${pr.css}">Aa</span>`, onclick: () => { Object.assign(l, pr.set); onLayerChange(l, true); } }))));
+    props.append(el('div', { class: 'sec-label' }, 'Styles'));
+    props.append(el('div', { class: 'presets' }, PRESETS.map(pr => presetTile(l, pr))));
+    const saved = loadCustomPresets();
+    props.append(el('div', { class: 'sec-label' }, 'Saved styles'));
+    props.append(el('div', { class: 'presets' }, [
+      ...saved.map(pr => presetTile(l, pr, true)),
+      el('button', { class: 'preset save-tile', title: 'Save the current style (font, colors and effects)', html: ICONS.plus, onclick: () => saveCustomPreset(l) }),
+    ]));
   } else {
     props.append(linkRow(l));
     props.append(slider(l, 'size', 'Size', 0.02, 1.2, 0.001));
