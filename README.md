@@ -30,3 +30,5 @@ python3 -m http.server
 Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
 
 Feature requests: [issues](https://github.com/theanam/3dsubmit-resizer/issues) · Feedback: anam.ahmed.a@gmail.com
+
+Screenshot photos by [Snapmaker 3D Printer](https://unsplash.com/@snapmaker_official) on [Unsplash](https://unsplash.com/photos/3d-printed-star-shaped-object-with-a-cylindrical-piece-q9EhSGklJGY).
