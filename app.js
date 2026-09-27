@@ -156,22 +156,19 @@ function makePreview(img) {
 /* ---------------- Straighten ---------------- */
 /*
  * A straightened photo is the original rotated by p.angle and trimmed to the
- * largest upright rectangle inside it, so there are never blank corners. That
+ * largest upright rectangle of the same aspect ratio inside it, so there are
+ * never blank corners and the photo keeps its shape. That
  * copy replaces p.img/w/h/preview/url, so cropping, overlays, collages and
  * export all work on it unchanged; the original is kept in p.orig.
  */
 const MAX_CANVAS_AREA = 16e6; // stays under iOS Safari's canvas size limit
 
+// Largest rectangle with the photo's own aspect ratio (w:h) that fits inside
+// the photo rotated by a, so straightening never changes the photo's shape.
 function inscribedRect(w, h, a) {
   const sin = Math.abs(Math.sin(a)), cos = Math.abs(Math.cos(a));
-  if (sin < 1e-9) return [w, h];
-  const long = Math.max(w, h), short = Math.min(w, h);
-  if (short <= 2 * sin * cos * long || Math.abs(sin - cos) < 1e-10) {
-    const x = short / 2;
-    return w >= h ? [x / sin, x / cos] : [x / cos, x / sin];
-  }
-  const cos2 = cos * cos - sin * sin;
-  return [(w * cos - h * sin) / cos2, (h * cos - w * sin) / cos2];
+  const k = Math.min(w / (w * cos + h * sin), h / (w * sin + h * cos));
+  return [w * k, h * k];
 }
 
 // Crops survive a re-straighten by keeping their centre and relative width.
@@ -202,8 +199,8 @@ async function applyAngle(p, angle) {
     const [rw, rh] = inscribedRect(o.w, o.h, a);
     const k = Math.min(1, Math.sqrt(MAX_CANVAS_AREA / (rw * rh)));
     const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.floor(rw * k));
-    c.height = Math.max(1, Math.floor(rh * k));
+    c.width = Math.max(1, Math.round(rw * k));
+    c.height = Math.max(1, Math.round(c.width * o.h / o.w));
     const ctx = c.getContext('2d');
     ctx.imageSmoothingQuality = 'high';
     ctx.translate(c.width / 2, c.height / 2);
