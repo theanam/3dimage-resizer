@@ -1397,19 +1397,150 @@ function ensureFonts() {
   if (!state.fonts) state.fonts = [...GENERIC_FONTS, ...detectFonts()];
 }
 
+const canLoadAllFonts = () => 'queryLocalFonts' in window && !state.allFonts;
+
 async function loadAllFonts() {
   try {
     const list = await window.queryLocalFonts();
     const families = [...new Set(list.map(f => f.family))].sort((a, b) => a.localeCompare(b));
-    if (!families.length) { toast('No fonts shared'); return; }
+    if (!families.length) { toast('No fonts shared'); return false; }
     state.fonts = [...GENERIC_FONTS, ...families];
-    renderPanel();
+    state.allFonts = true;
     toast(`${families.length} fonts loaded`);
+    return true;
   } catch (e) {
     console.error(e);
     toast('Font access was blocked');
+    return false;
   }
 }
+
+/* ---------------- Font picker ---------------- */
+/*
+ * Each font is listed in its own face next to a sample of the layer's text.
+ * Moving through the list previews the font on the canvas; Escape or clicking
+ * away restores the font the layer had when the menu opened.
+ */
+const fontLabel = (f) => GENERIC_LABELS[f] || f;
+const CHEVRON = '<svg viewBox="0 0 24 24" width="16" height="16"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function fontPicker(l) {
+  ensureFonts();
+  const name = el('span', { class: 'fb-name' }, fontLabel(l.font));
+  const btn = el('button', { type: 'button', class: 'font-btn', title: 'Font', 'aria-haspopup': 'listbox' }, [name]);
+  btn.insertAdjacentHTML('beforeend', CHEVRON);
+  btn.style.fontFamily = fontCss(l.font);
+  btn.addEventListener('click', () => (fontMenu ? closeFontMenu(false) : openFontMenu(l, btn)));
+  return btn;
+}
+
+let fontMenu = null;
+
+function openFontMenu(l, anchor) {
+  closeFontMenu(false);
+  const original = l.font;
+  const sample = ((l.text || '').split('\n')[0].trim() || 'Aa Bb Cc').slice(0, 24);
+  const search = el('input', { type: 'search', class: 'fm-search', placeholder: 'Search fonts', 'aria-label': 'Search fonts', spellcheck: 'false' });
+  const list = el('div', { class: 'fm-list', role: 'listbox' });
+  const menu = el('div', { class: 'font-menu' }, [search, list]);
+  let rows = [], active = -1;
+
+  const preview = (f) => { l.font = f; scheduleRedraw(); };
+  const setActive = (i, scroll) => {
+    if (!rows.length) return;
+    active = clamp(i, 0, rows.length - 1);
+    rows.forEach((r, k) => r.classList.toggle('active', k === active));
+    if (scroll) rows[active].scrollIntoView({ block: 'nearest' });
+    preview(rows[active].dataset.font);
+  };
+
+  const render = () => {
+    const q = search.value.trim().toLowerCase();
+    const all = state.fonts.includes(original) ? state.fonts : [original, ...state.fonts];
+    const fonts = all.filter(f => !q || fontLabel(f).toLowerCase().includes(q));
+    list.innerHTML = '';
+    rows = [];
+    if (!fonts.length) { list.append(el('div', { class: 'fm-empty' }, 'No matching fonts')); return; }
+    let group = null;
+    for (const f of fonts) {
+      const g = GENERIC_FONTS.includes(f) ? 'Generic' : 'Installed';
+      if (g !== group && !q) { list.append(el('div', { class: 'fm-group' }, g)); group = g; }
+      const row = el('div', { class: 'fm-row' + (f === original ? ' current' : ''), role: 'option', 'aria-selected': String(f === original) }, [
+        el('span', { class: 'fm-name' }, fontLabel(f)),
+        el('span', { class: 'fm-sample' }, sample),
+      ]);
+      row.dataset.font = f;
+      row.style.fontFamily = fontCss(f);
+      const idx = rows.length;
+      row.addEventListener('pointerenter', () => setActive(idx, false));
+      row.addEventListener('click', () => commit(f));
+      list.append(row);
+      rows.push(row);
+    }
+    const cur = rows.findIndex(r => r.dataset.font === l.font);
+    active = cur;
+    if (cur >= 0) { rows[cur].classList.add('active'); rows[cur].scrollIntoView({ block: 'center' }); }
+  };
+
+  const commit = (f) => {
+    l.font = f;
+    closeFontMenu(true);
+    anchor.style.fontFamily = fontCss(f);
+    anchor.querySelector('.fb-name').textContent = fontLabel(f);
+    const icon = $('layerList').querySelector('.layer-row.on .lr-icon');
+    if (icon) icon.style.fontFamily = fontCss(f);
+    onLayerChange(l);
+  };
+
+  if (canLoadAllFonts()) {
+    const more = el('button', { type: 'button', class: 'btn ghost sm', html: `${ICONS.fonts} Show all installed fonts` });
+    more.addEventListener('click', async () => {
+      if (await loadAllFonts()) { more.parentElement.remove(); render(); search.focus(); }
+    });
+    menu.append(el('div', { class: 'fm-foot' }, [more]));
+  }
+
+  search.addEventListener('input', () => { render(); if (rows.length) setActive(0, true); });
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { setActive(active + 1, true); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { setActive(active - 1, true); e.preventDefault(); }
+    else if (e.key === 'Enter') { if (rows[active]) commit(rows[active].dataset.font); e.preventDefault(); }
+    else if (e.key === 'Escape') { closeFontMenu(false); anchor.focus(); e.preventDefault(); e.stopPropagation(); }
+  });
+
+  document.body.append(menu);
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(Math.max(r.width, 300), innerWidth - 16);
+  menu.style.width = w + 'px';
+  menu.style.left = clamp(r.left, 8, innerWidth - w - 8) + 'px';
+  const below = innerHeight - r.bottom - 12, above = r.top - 12;
+  if (below >= 280 || below >= above) {
+    menu.style.top = r.bottom + 4 + 'px';
+    menu.style.maxHeight = Math.min(380, below) + 'px';
+  } else {
+    menu.style.bottom = innerHeight - r.top + 4 + 'px';
+    menu.style.maxHeight = Math.min(380, above) + 'px';
+  }
+  anchor.classList.add('open');
+  fontMenu = { menu, anchor, restore: () => { l.font = original; scheduleRedraw(); } };
+  render();
+  search.focus();
+}
+
+function closeFontMenu(keep) {
+  if (!fontMenu) return;
+  const m = fontMenu;
+  fontMenu = null;
+  if (!keep) m.restore();
+  m.anchor.classList.remove('open');
+  m.menu.remove();
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (fontMenu && !fontMenu.menu.contains(e.target) && !fontMenu.anchor.contains(e.target)) closeFontMenu(false);
+}, true);
+window.addEventListener('resize', () => closeFontMenu(false));
+$('props').addEventListener('scroll', () => closeFontMenu(false));
 
 const GENERIC_LABELS = { 'system-ui': 'System UI', 'sans-serif': 'Sans-serif', serif: 'Serif', monospace: 'Monospace', cursive: 'Cursive' };
 
@@ -1555,6 +1686,7 @@ function syncSizeSlider() {
 }
 
 function renderProps() {
+  closeFontMenu(false);
   const props = $('props');
   props.innerHTML = '';
   const l = state.sel;
@@ -1574,28 +1706,7 @@ function renderProps() {
     });
     props.append(ta);
 
-    ensureFonts();
-    const fonts = state.fonts.includes(l.font) ? state.fonts : [l.font, ...state.fonts];
-    const sel = el('select', { title: 'Font' });
-    for (const f of fonts) {
-      const o = el('option', { value: f }, GENERIC_LABELS[f] || f);
-      o.style.fontFamily = fontCss(f);
-      sel.append(o);
-    }
-    sel.value = l.font;
-    sel.style.fontFamily = fontCss(l.font);
-    sel.addEventListener('change', () => {
-      l.font = sel.value;
-      sel.style.fontFamily = fontCss(l.font);
-      onLayerChange(l);
-      const icon = $('layerList').querySelector('.layer-row.on .lr-icon');
-      if (icon) icon.style.fontFamily = fontCss(l.font);
-    });
-    const fontRow = el('div', { class: 'prow' }, [sel]);
-    if ('queryLocalFonts' in window && state.fonts.length <= GENERIC_FONTS.length + COMMON_FONTS.length) {
-      fontRow.append(el('button', { class: 'tbtn', title: 'Load all installed fonts', html: ICONS.fonts, style: 'border:1px solid var(--line);border-radius:9px', onclick: loadAllFonts }));
-    }
-    props.append(fontRow);
+    props.append(fontPicker(l));
 
     const alignGroup = el('span', { class: 'tgroup' }, [['left', ICONS.alignL], ['center', ICONS.alignC], ['right', ICONS.alignR]].map(([a, icon]) =>
       el('button', { class: 'tbtn' + (l.align === a ? ' on' : ''), title: 'Align ' + a, html: icon, onclick: () => { l.align = a; onLayerChange(l, true); } })));
