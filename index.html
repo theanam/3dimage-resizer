@@ -76,9 +76,49 @@
         </aside>
 
         <div class="editor">
-          <div class="variant-tabs" id="variantTabs"></div>
-          <div class="stage" id="stage">
-            <img id="cropImg" alt="">
+          <div class="editor-head">
+            <div class="variant-tabs" id="variantTabs"></div>
+            <div class="seg" id="modeSeg" role="tablist">
+              <button data-mode="crop" class="on">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                Crop
+              </button>
+              <button data-mode="overlay">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 7V5h16v2M12 5v14M9 19h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Overlay
+              </button>
+            </div>
+          </div>
+          <div class="editor-body" id="editorBody">
+            <div class="stage" id="stage">
+              <img id="cropImg" alt="">
+            </div>
+            <div class="stage overlay-stage" id="overlayStage" hidden>
+              <div class="frame" id="frame">
+                <canvas id="frameCanvas"></canvas>
+                <div class="guide gv" id="guideV" hidden></div>
+                <div class="guide gh" id="guideH" hidden></div>
+                <div class="sel-box" id="selBox" hidden><span class="handle" id="selHandle"></span></div>
+              </div>
+            </div>
+            <aside class="panel" id="panel" hidden>
+              <div class="panel-head">
+                <button class="btn ghost sm" id="addTextBtn">
+                  <svg viewBox="0 0 24 24" width="15" height="15"><path d="M5 7V5h14v2M12 5v14M9 19h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Text
+                </button>
+                <label class="btn ghost sm">
+                  <input type="file" id="overlayInput" accept="image/*,.heic,.heif,.svg" hidden>
+                  <svg viewBox="0 0 24 24" width="15" height="15"><rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="1.8" fill="currentColor"/><path d="m4 18 5.5-5 4 3.5L17 13l3.5 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                  Image
+                </label>
+              </div>
+              <div class="layer-list" id="layerList"></div>
+              <div class="props" id="props"></div>
+              <div class="panel-foot">
+                <button class="btn ghost sm" id="copyAllBtn" title="Replace overlays on every photo with these">Copy to all photos</button>
+              </div>
+            </aside>
           </div>
           <div class="editor-foot">
             <span class="meta" id="meta"></span>
