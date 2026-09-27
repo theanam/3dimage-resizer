@@ -73,6 +73,9 @@
             <input type="file" id="fileInput2" accept="image/*,.heic,.heif" multiple hidden>
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </label>
+          <button class="add-more" id="collageBtn" title="Make a collage (2–4 photos)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><rect x="3.5" y="3.5" width="7" height="17" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+          </button>
         </aside>
 
         <div class="editor">
@@ -99,6 +102,7 @@
                 <div class="guide gv" id="guideV" hidden></div>
                 <div class="guide gh" id="guideH" hidden></div>
                 <div class="sel-box" id="selBox" hidden><span class="handle" id="selHandle"></span></div>
+                <div class="cell-box" id="cellBox" hidden></div>
               </div>
             </div>
             <aside class="panel" id="panel" hidden>
@@ -118,6 +122,9 @@
               <div class="panel-foot">
                 <button class="btn ghost sm" id="copyAllBtn" title="Replace overlays on every photo with these">Copy to all photos</button>
               </div>
+            </aside>
+            <aside class="panel" id="collagePanel" hidden>
+              <div class="props" id="collageBody"></div>
             </aside>
           </div>
           <div class="editor-foot">
@@ -167,6 +174,20 @@
           <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
           anam.ahmed.a@gmail.com
         </a>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="collageDialog" class="dialog">
+    <form method="dialog" class="dialog-inner">
+      <button class="icon-btn close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <h2>Collage</h2>
+      <p class="muted">Pick 2–4 photos, in order.</p>
+      <div class="pick-grid" id="pickGrid"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn primary" id="collageCreate" disabled>Create collage</button>
       </div>
     </form>
   </dialog>

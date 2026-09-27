@@ -164,6 +164,113 @@ function cropFor(photo, t) {
   return photo.crops[t.id];
 }
 
+/* ---------------- Collages ---------------- */
+/*
+ * A collage is an item in the photo list like any other, but its base image is
+ * composed from 2–4 source photos. Cells are defined in frame fractions; each
+ * cell keeps a focus point and zoom that are shared by every output size, so
+ * the same framing adapts to 4:3 and 3:4.
+ */
+const evenSplit = (n, dir) => Array.from({ length: n }, (_, i) => dir === 'cols' ? [i / n, 0, 1 / n, 1] : [0, i / n, 1, 1 / n]);
+const COLLAGE_LAYOUTS = {
+  2: { auto: null, cols: evenSplit(2, 'cols'), rows: evenSplit(2, 'rows') },
+  3: {
+    auto: null,
+    'big-left': [[0, 0, .5, 1], [.5, 0, .5, .5], [.5, .5, .5, .5]],
+    'big-right': [[.5, 0, .5, 1], [0, 0, .5, .5], [0, .5, .5, .5]],
+    'big-top': [[0, 0, 1, .5], [0, .5, .5, .5], [.5, .5, .5, .5]],
+    'big-bottom': [[0, .5, 1, .5], [0, 0, .5, .5], [.5, 0, .5, .5]],
+    cols: evenSplit(3, 'cols'), rows: evenSplit(3, 'rows'),
+  },
+  4: {
+    auto: null,
+    grid: [[0, 0, .5, .5], [.5, 0, .5, .5], [0, .5, .5, .5], [.5, .5, .5, .5]],
+    'big-left': [[0, 0, 2 / 3, 1], [2 / 3, 0, 1 / 3, 1 / 3], [2 / 3, 1 / 3, 1 / 3, 1 / 3], [2 / 3, 2 / 3, 1 / 3, 1 / 3]],
+    'big-top': [[0, 0, 1, 2 / 3], [0, 2 / 3, 1 / 3, 1 / 3], [1 / 3, 2 / 3, 1 / 3, 1 / 3], [2 / 3, 2 / 3, 1 / 3, 1 / 3]],
+    cols: evenSplit(4, 'cols'), rows: evenSplit(4, 'rows'),
+  },
+};
+const LAYOUT_NAMES = {
+  auto: 'Auto: adapts to each size', cols: 'Side by side', rows: 'Stacked', grid: 'Grid',
+  'big-left': 'Big photo left', 'big-right': 'Big photo right', 'big-top': 'Big photo top', 'big-bottom': 'Big photo bottom',
+};
+let collageSeq = 0;
+
+function resolveLayout(p, W, H) {
+  const n = p.sources.length, land = W >= H;
+  if (p.layout !== 'auto') return p.layout;
+  return n === 2 ? (land ? 'cols' : 'rows') : n === 3 ? (land ? 'big-left' : 'big-top') : 'grid';
+}
+
+function collageRects(p, W, H) {
+  const rects = COLLAGE_LAYOUTS[p.sources.length][resolveLayout(p, W, H)];
+  const g = p.gap * Math.min(W, H);
+  const iw = W - 2 * g, ih = H - 2 * g;
+  return rects.map(([x, y, w, h]) => {
+    const x0 = g + x * iw + (x > 0.001 ? g / 2 : 0);
+    const x1 = g + (x + w) * iw - (x + w < 0.999 ? g / 2 : 0);
+    const y0 = g + y * ih + (y > 0.001 ? g / 2 : 0);
+    const y1 = g + (y + h) * ih - (y + h < 0.999 ? g / 2 : 0);
+    return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+  });
+}
+
+function cellView(src, cell, cw, ch) {
+  const scale = Math.max(cw / src.w, ch / src.h) * cell.zoom;
+  const sw = cw / scale, sh = ch / scale;
+  return { scale, sw, sh, sx: clamp(cell.fx * src.w - sw / 2, 0, src.w - sw), sy: clamp(cell.fy * src.h - sh / 2, 0, src.h - sh) };
+}
+
+function drawCollage(ctx, p, W, H, hi) {
+  ctx.fillStyle = p.gapColor;
+  ctx.fillRect(0, 0, W, H);
+  ctx.imageSmoothingQuality = 'high';
+  const radius = p.radius * Math.min(W, H);
+  collageRects(p, W, H).forEach((c, i) => {
+    const src = p.sources[i];
+    const v = cellView(src, p.cells[i], c.w, c.h);
+    const img = hi ? src.img : src.preview.canvas;
+    const k = hi ? 1 : src.preview.scale;
+    ctx.save();
+    if (radius > 0) { roundRect(ctx, c.x, c.y, c.w, c.h, radius); ctx.clip(); }
+    ctx.drawImage(img, v.sx * k, v.sy * k, v.sw * k, v.sh * k, c.x, c.y, c.w, c.h);
+    ctx.restore();
+  });
+}
+
+// Draws the item's base image (crop or collage) for target t into a W×H canvas.
+function renderBase(ctx, p, t, W, H, hi) {
+  ctx.imageSmoothingQuality = 'high';
+  if (p.kind === 'collage') { drawCollage(ctx, p, W, H, hi); return; }
+  const r = cropFor(p, t);
+  if (hi) ctx.drawImage(p.img, r.x, r.y, r.width, r.height, 0, 0, W, H);
+  else {
+    const s = p.preview.scale;
+    ctx.drawImage(p.preview.canvas, r.x * s, r.y * s, r.width * s, r.height * s, 0, 0, W, H);
+  }
+}
+
+function updateCollageThumb(c) {
+  const cv = document.createElement('canvas');
+  cv.width = 240;
+  cv.height = 180;
+  drawCollage(cv.getContext('2d'), c, 240, 180, false);
+  c.thumb = cv.toDataURL('image/jpeg', 0.75);
+}
+
+function createCollage(sources) {
+  const c = {
+    id: ++seq, kind: 'collage', name: `collage-${++collageSeq}`, sources,
+    layout: 'auto', gap: 0.015, radius: 0, gapColor: '#ffffff',
+    cells: sources.map(() => ({ fx: 0.5, fy: 0.5, zoom: 1 })),
+    crops: {}, layers: [],
+  };
+  updateCollageThumb(c);
+  state.photos.push(c);
+  renderSummary();
+  selectPhoto(c);
+}
+
 async function addFiles(fileList) {
   const files = [...fileList].filter(f => f.type.startsWith('image/') || isHeic(f));
   if (!files.length) { toast('No images found'); return; }
@@ -268,6 +375,10 @@ function renderPhotos() {
       img.src = p.thumb;
       img.alt = p.name;
       b.appendChild(img);
+      if (p.kind === 'collage') {
+        b.title = `Collage of ${p.sources.length}`;
+        b.insertAdjacentHTML('beforeend', `<span class="badge">${ICONS.collage}</span>`);
+      }
       b.addEventListener('click', () => selectPhoto(p));
     }
     list.appendChild(b);
@@ -312,12 +423,9 @@ function renderTabs() {
 function drawTabPreview(p, t, canvas) {
   canvas = canvas || $('variantTabs').querySelector(`[data-id="${t.id}"] canvas`);
   if (!canvas) return;
-  const r = cropFor(p, t);
-  const s = p.preview.scale;
   const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(p.preview.canvas, r.x * s, r.y * s, r.width * s, r.height * s, 0, 0, canvas.width, canvas.height);
+  renderBase(ctx, p, t, canvas.width, canvas.height, false);
   drawLayers(ctx, p.layers, canvas.width, canvas.height, t.id);
 }
 
@@ -334,14 +442,36 @@ function scheduleTabPreviews() {
 
 /* ---------------- Selection & modes ---------------- */
 
+const isCollageCrop = () => state.mode === 'crop' && state.activePhoto?.kind === 'collage';
+
+// Crop mode shows Cropper for photos and the cell editor for collages;
+// overlay mode always uses the canvas frame.
+function applyView() {
+  const overlay = state.mode === 'overlay', collage = isCollageCrop();
+  $('stage').hidden = overlay || collage;
+  $('overlayStage').hidden = !(overlay || collage);
+  $('panel').hidden = !overlay;
+  $('collagePanel').hidden = !collage;
+  $('resetBtn').hidden = overlay;
+  $('overlayStage').classList.toggle('collage-edit', collage);
+}
+
+function showCurrent() {
+  if (cropper && (state.mode !== 'crop' || state.activePhoto?.kind === 'collage')) { cropper.destroy(); cropper = null; }
+  applyView();
+  if (state.mode === 'overlay') { ensureFonts(); layoutFrame(); renderPanel(); }
+  else if (isCollageCrop()) { layoutFrame(); renderCollagePanel(); }
+  else mountCropper();
+}
+
 function selectPhoto(photo) {
   state.activePhoto = photo;
   state.sel = null;
+  state.cell = 0;
   if (!state.activeTarget || !state.enabled.has(state.activeTarget)) state.activeTarget = enabledTargets()[0].id;
   renderPhotos();
   renderTabs();
-  if (state.mode === 'crop') mountCropper();
-  else { layoutFrame(); renderPanel(); }
+  showCurrent();
   updateMeta();
 }
 
@@ -351,7 +481,7 @@ function selectTarget(id) {
   const p = state.activePhoto;
   if (!p) return;
   const t = byId(id);
-  if (state.mode === 'overlay') {
+  if (state.mode === 'overlay' || isCollageCrop()) {
     layoutFrame();
     syncSizeSlider();
   } else if (cropper) {
@@ -369,20 +499,8 @@ function setMode(mode) {
   if (state.mode === mode) return;
   state.mode = mode;
   $('modeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
-  const overlay = mode === 'overlay';
-  $('stage').hidden = overlay;
-  $('overlayStage').hidden = !overlay;
-  $('panel').hidden = !overlay;
-  $('resetBtn').hidden = overlay;
-  if (overlay) {
-    if (cropper) { cropper.destroy(); cropper = null; }
-    ensureFonts();
-    layoutFrame();
-    renderPanel();
-  } else {
-    state.sel = null;
-    mountCropper();
-  }
+  if (mode === 'crop') state.sel = null;
+  showCurrent();
 }
 $('modeSeg').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-mode]');
@@ -394,7 +512,7 @@ $('modeSeg').addEventListener('click', (e) => {
 function mountCropper() {
   const photo = state.activePhoto;
   if (cropper) { cropper.destroy(); cropper = null; }
-  if (!photo || photo.loading) return;
+  if (!photo || photo.loading || photo.kind === 'collage') return;
   const img = $('cropImg');
   img.src = photo.url;
   const t = byId(state.activeTarget);
@@ -493,12 +611,29 @@ function outputSize(rect, t) {
 function updateMeta() {
   const p = state.activePhoto, t = byId(state.activeTarget);
   if (!p || !t || p.loading) { $('meta').textContent = ''; return; }
+  if (p.kind === 'collage') {
+    const o = fullSize(t);
+    $('meta').textContent = `Collage of ${p.sources.length} → ${o.w}×${o.h} JPG`;
+    return;
+  }
   const o = outputSize(cropFor(p, t), t);
   $('meta').textContent = `${p.w}×${p.h} → ${o.w}×${o.h} JPG`;
 }
 
+function fullSize(t) {
+  return t.rw >= t.rh
+    ? { w: t.max, h: Math.round(t.max * t.rh / t.rw) }
+    : { w: Math.round(t.max * t.rw / t.rh), h: t.max };
+}
+
 $('resetBtn').addEventListener('click', () => {
   const p = state.activePhoto, t = byId(state.activeTarget);
+  if (p?.kind === 'collage') {
+    p.cells = p.cells.map(() => ({ fx: 0.5, fy: 0.5, zoom: 1 }));
+    collageChanged(true);
+    renderCollagePanel();
+    return;
+  }
   if (!p || !t || !cropper) return;
   cropper.setData(autoCrop(p, t));
 });
@@ -843,18 +978,22 @@ function layoutFrame() {
   const W = Math.round(w * dpr), H = Math.round(h * dpr);
   frameCanvas.width = W;
   frameCanvas.height = H;
-
-  bgCanvas = document.createElement('canvas');
-  bgCanvas.width = W;
-  bgCanvas.height = H;
-  const bx = bgCanvas.getContext('2d');
-  bx.imageSmoothingQuality = 'high';
-  const r = cropFor(p, t);
-  bx.drawImage(p.img, r.x, r.y, r.width, r.height, 0, 0, W, H);
+  buildBg(true);
   redraw();
 }
 
-new ResizeObserver(() => { if (state.mode === 'overlay') layoutFrame(); }).observe($('overlayStage'));
+function buildBg(hi) {
+  const p = state.activePhoto, t = byId(state.activeTarget);
+  const W = frameCanvas.width, H = frameCanvas.height;
+  if (!p || !t || !W) return;
+  if (!bgCanvas) bgCanvas = document.createElement('canvas');
+  if (bgCanvas.width !== W || bgCanvas.height !== H) { bgCanvas.width = W; bgCanvas.height = H; }
+  const bx = bgCanvas.getContext('2d');
+  bx.clearRect(0, 0, W, H);
+  renderBase(bx, p, t, W, H, hi);
+}
+
+new ResizeObserver(() => { if (!$('overlayStage').hidden) layoutFrame(); }).observe($('overlayStage'));
 
 let redrawPending = false;
 function scheduleRedraw() {
@@ -866,19 +1005,20 @@ function scheduleRedraw() {
 
 function redraw() {
   const p = state.activePhoto;
-  if (!p || !bgCanvas || state.mode !== 'overlay') return;
+  if (!p || !bgCanvas || $('overlayStage').hidden) return;
   const ctx = frameCanvas.getContext('2d');
   const W = frameCanvas.width, H = frameCanvas.height;
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(bgCanvas, 0, 0);
   drawLayers(ctx, p.layers, W, H, state.activeTarget);
   updateSelBox();
+  updateCellBox();
 }
 
 function updateSelBox() {
   const box = $('selBox');
   const l = state.sel;
-  if (!l || !state.activePhoto.layers.includes(l)) { box.hidden = true; return; }
+  if (state.mode !== 'overlay' || !l || !state.activePhoto.layers.includes(l)) { box.hidden = true; return; }
   const ctx = frameCanvas.getContext('2d');
   const W = frameCanvas.width, H = frameCanvas.height;
   const b = layerGeom(ctx, l, W, H, state.activeTarget).box;
@@ -912,6 +1052,20 @@ frame.addEventListener('pointerdown', (e) => {
   const rect = frame.getBoundingClientRect();
   const px = e.clientX - rect.left, py = e.clientY - rect.top;
 
+  if (isCollageCrop()) {
+    const rs = collageRects(p, frameCss.w, frameCss.h);
+    const i = cellAt(rs, px, py);
+    if (i < 0) return;
+    if (state.cell !== i) { state.cell = i; renderCollagePanel(); }
+    const r = rs[i], cell = p.cells[i];
+    drag = { type: 'pan', i, px, py, fx0: cell.fx, fy0: cell.fy, r, scale: cellView(p.sources[i], cell, r.w, r.h).scale };
+    frame.setPointerCapture(e.pointerId);
+    frame.style.cursor = 'grabbing';
+    updateCellBox();
+    e.preventDefault();
+    return;
+  }
+
   if (e.target === $('selHandle') && state.sel) {
     const l = state.sel;
     const pl = place(l, state.activeTarget);
@@ -932,6 +1086,20 @@ frame.addEventListener('pointerdown', (e) => {
 frame.addEventListener('pointermove', (e) => {
   const rect = frame.getBoundingClientRect();
   const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  if (isCollageCrop()) {
+    const p = state.activePhoto;
+    if (!drag) {
+      frame.style.cursor = cellAt(collageRects(p, frameCss.w, frameCss.h), px, py) >= 0 ? 'grab' : 'default';
+      return;
+    }
+    const src = p.sources[drag.i], cell = p.cells[drag.i];
+    const hx = Math.min(0.5, drag.r.w / drag.scale / 2 / src.w);
+    const hy = Math.min(0.5, drag.r.h / drag.scale / 2 / src.h);
+    cell.fx = clamp(drag.fx0 - (px - drag.px) / (drag.scale * src.w), hx, 1 - hx);
+    cell.fy = clamp(drag.fy0 - (py - drag.py) / (drag.scale * src.h), hy, 1 - hy);
+    collageChanged();
+    return;
+  }
   if (!drag) {
     frame.style.cursor = e.target === $('selHandle') ? 'nwse-resize' : hitTest(px, py) ? 'move' : 'default';
     return;
@@ -955,6 +1123,7 @@ frame.addEventListener('pointermove', (e) => {
 });
 
 function endDrag() {
+  if (drag?.type === 'pan') frame.style.cursor = 'grab';
   drag = null;
   $('guideV').hidden = true;
   $('guideH').hidden = true;
@@ -967,6 +1136,59 @@ frame.addEventListener('dblclick', () => {
     if (ta) { ta.focus(); ta.select(); }
   }
 });
+
+function cellAt(rects, px, py) {
+  return rects.findIndex(r => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h);
+}
+
+function updateCellBox() {
+  const box = $('cellBox');
+  const p = state.activePhoto;
+  if (!isCollageCrop() || !p) { box.hidden = true; return; }
+  const r = collageRects(p, frameCss.w, frameCss.h)[state.cell];
+  if (!r) { box.hidden = true; return; }
+  box.hidden = false;
+  box.style.left = r.x + 'px';
+  box.style.top = r.y + 'px';
+  box.style.width = r.w + 'px';
+  box.style.height = r.h + 'px';
+}
+
+// Live edits redraw from the fast previews; full resolution follows once idle.
+let collageRaf = false, collageIdle;
+function collageChanged(now) {
+  const p = state.activePhoto;
+  if (!collageRaf) {
+    collageRaf = true;
+    requestAnimationFrame(() => {
+      collageRaf = false;
+      buildBg(false);
+      redraw();
+      scheduleTabPreviews();
+    });
+  }
+  clearTimeout(collageIdle);
+  collageIdle = setTimeout(() => {
+    if (state.activePhoto !== p) return;
+    buildBg(true);
+    redraw();
+    updateCollageThumb(p);
+    renderPhotos();
+  }, now ? 0 : 250);
+}
+
+frame.addEventListener('wheel', (e) => {
+  if (!isCollageCrop()) return;
+  const p = state.activePhoto;
+  const rect = frame.getBoundingClientRect();
+  const i = cellAt(collageRects(p, frameCss.w, frameCss.h), e.clientX - rect.left, e.clientY - rect.top);
+  if (i < 0) return;
+  e.preventDefault();
+  p.cells[i].zoom = clamp(p.cells[i].zoom * Math.exp(-e.deltaY * 0.0015), 1, 6);
+  if (state.cell !== i) { state.cell = i; renderCollagePanel(); }
+  else { const z = $('collageBody').querySelector('input[data-key="zoom"]'); if (z) z.value = p.cells[i].zoom; }
+  collageChanged();
+}, { passive: false });
 
 document.addEventListener('keydown', (e) => {
   if (state.mode !== 'overlay' || !state.sel || $('workView').hidden) return;
@@ -1022,6 +1244,9 @@ const GENERIC_LABELS = { 'system-ui': 'System UI', 'sans-serif': 'Sans-serif', s
 /* ---------------- Panel ---------------- */
 
 const ICONS = {
+  collage: '<svg viewBox="0 0 24 24" width="12" height="12"><rect x="3" y="3" width="8" height="18" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor"/></svg>',
+  left: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  right: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   up: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   down: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   del: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1243,9 +1468,127 @@ function renderProps() {
   }
 }
 
+/* ---------------- Collage panel & picker ---------------- */
+
+function layoutIcon(key, n) {
+  if (key === 'auto') return '<span class="auto-lbl">Auto</span>';
+  const rects = COLLAGE_LAYOUTS[n][key];
+  const W = 36, H = 27, g = 1.5;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${rects.map(([x, y, w, h]) =>
+    `<rect x="${x * W + g / 2}" y="${y * H + g / 2}" width="${w * W - g}" height="${h * H - g}" rx="2" fill="currentColor"/>`).join('')}</svg>`;
+}
+
+function plainSlider(obj, key, label, min, max, step, onChange) {
+  const input = el('input', { type: 'range', min, max, step });
+  input.value = obj[key];
+  input.dataset.key = key;
+  input.addEventListener('input', () => { obj[key] = parseFloat(input.value); onChange(); });
+  return el('label', { class: 'slider', title: label }, [el('span', {}, label), input]);
+}
+
+function renderCollagePanel() {
+  const p = state.activePhoto;
+  const body = $('collageBody');
+  if (!p || p.kind !== 'collage') return;
+  body.innerHTML = '';
+  const n = p.sources.length;
+
+  body.append(el('div', { class: 'sec-label' }, 'Layout'));
+  body.append(el('div', { class: 'layout-grid' }, Object.keys(COLLAGE_LAYOUTS[n]).map(key =>
+    el('button', {
+      class: 'layout-btn' + (p.layout === key ? ' on' : ''), title: LAYOUT_NAMES[key], html: layoutIcon(key, n),
+      onclick: () => { p.layout = key; collageChanged(true); renderCollagePanel(); },
+    }))));
+
+  const color = el('input', { type: 'color', class: 'swatch', title: 'Gap color' });
+  color.value = p.gapColor;
+  color.addEventListener('input', () => { p.gapColor = color.value; collageChanged(); });
+  body.append(el('div', { class: 'prow' }, [
+    el('div', { style: 'flex:1;display:flex;flex-direction:column;gap:6px' }, [
+      plainSlider(p, 'gap', 'Gap', 0, 0.08, 0.001, () => { collageChanged(); updateCellBox(); }),
+      plainSlider(p, 'radius', 'Corners', 0, 0.08, 0.001, () => collageChanged()),
+    ]),
+    color,
+  ]));
+
+  const i = clamp(state.cell || 0, 0, n - 1);
+  const src = p.sources[i], cell = p.cells[i];
+  const swap = (dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= n) return;
+    [p.sources[i], p.sources[j]] = [p.sources[j], p.sources[i]];
+    [p.cells[i], p.cells[j]] = [p.cells[j], p.cells[i]];
+    state.cell = j;
+    collageChanged(true);
+    renderCollagePanel();
+  };
+  body.append(el('div', { class: 'sec-label' }, `Photo ${i + 1} of ${n}`));
+  body.append(el('div', { class: 'cell-row' }, [
+    el('img', { src: src.thumb, alt: '', class: 'cell-thumb' }),
+    el('div', { style: 'flex:1;min-width:0' }, [plainSlider(cell, 'zoom', 'Zoom', 1, 6, 0.01, () => collageChanged())]),
+  ]));
+  body.append(el('div', { class: 'prow' }, [
+    el('button', { class: 'btn ghost sm', title: 'Swap with the previous photo', onclick: () => swap(-1), html: `${ICONS.left} Move`, ...(i === 0 ? { disabled: '' } : {}) }),
+    el('button', { class: 'btn ghost sm', title: 'Swap with the next photo', onclick: () => swap(1), html: `Move ${ICONS.right}`, ...(i === n - 1 ? { disabled: '' } : {}) }),
+  ]));
+  body.append(el('p', { class: 'muted hint' }, 'Drag a photo to reposition it, scroll to zoom.'));
+}
+
+const pickState = [];
+function renderPicker() {
+  const grid = $('pickGrid');
+  grid.innerHTML = '';
+  for (const p of state.photos.filter(x => !x.loading && x.kind !== 'collage')) {
+    const idx = pickState.indexOf(p);
+    const b = el('button', { type: 'button', class: 'pick' + (idx >= 0 ? ' on' : ''), title: p.name }, [
+      el('img', { src: p.thumb, alt: '' }),
+      el('span', { class: 'num' }, idx >= 0 ? String(idx + 1) : ''),
+    ]);
+    b.addEventListener('click', () => {
+      const k = pickState.indexOf(p);
+      if (k >= 0) pickState.splice(k, 1);
+      else if (pickState.length >= 4) { toast('Up to 4 photos'); return; }
+      else pickState.push(p);
+      renderPicker();
+    });
+    grid.append(b);
+  }
+  $('collageCreate').disabled = pickState.length < 2;
+}
+
+$('collageBtn').addEventListener('click', () => {
+  const photos = state.photos.filter(x => !x.loading && x.kind !== 'collage');
+  if (photos.length < 2) { toast('Add at least 2 photos'); return; }
+  pickState.length = 0;
+  // Preselect the current photo and the ones after it, up to 3 total.
+  const start = Math.max(0, photos.indexOf(state.activePhoto));
+  pickState.push(...photos.slice(start, start + 3));
+  if (pickState.length < 2) pickState.unshift(...photos.slice(Math.max(0, start - (2 - pickState.length)), start));
+  renderPicker();
+  $('collageDialog').showModal();
+});
+$('collageCreate').addEventListener('click', () => {
+  if (pickState.length < 2) return;
+  $('collageDialog').close();
+  if (state.mode !== 'crop') setMode('crop');
+  createCollage([...pickState]);
+});
+$('collageDialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+
 /* ---------------- Export ---------------- */
 
 function renderOutput(p, t) {
+  if (p.kind === 'collage') {
+    const { w, h } = fullSize(t);
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const ctx = out.getContext('2d');
+    drawCollage(ctx, p, w, h, true);
+    drawLayers(ctx, p.layers, w, h, t.id);
+    return new Promise((resolve, reject) =>
+      out.toBlob(b => b ? resolve(b) : reject(new Error('encode failed')), 'image/jpeg', JPEG_QUALITY));
+  }
   const img = p.img, rect = cropFor(p, t);
   const { w, h } = outputSize(rect, t);
   let src = img, sx = rect.x, sy = rect.y, sw = rect.width, sh = rect.height;
