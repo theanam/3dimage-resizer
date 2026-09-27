@@ -317,7 +317,7 @@ function drawTabPreview(p, t, canvas) {
   ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(p.preview.canvas, r.x * s, r.y * s, r.width * s, r.height * s, 0, 0, canvas.width, canvas.height);
-  drawLayers(ctx, p.layers, canvas.width, canvas.height);
+  drawLayers(ctx, p.layers, canvas.width, canvas.height, t.id);
 }
 
 let tabsPending = false;
@@ -352,6 +352,7 @@ function selectTarget(id) {
   const t = byId(id);
   if (state.mode === 'overlay') {
     layoutFrame();
+    syncSizeSlider();
   } else if (cropper) {
     suppressCrop = true;
     cropper.setAspectRatio(t.rw / t.rh);
@@ -504,8 +505,8 @@ function fontCss(name) {
   return GENERIC_FONTS.includes(name) ? name : `"${name.replace(/"/g, '')}", sans-serif`;
 }
 
-function textGeom(ctx, l, W, H) {
-  const fs = Math.max(1, l.size * W);
+function textGeom(ctx, l, pl, W, H) {
+  const fs = Math.max(1, pl.size * W);
   const font = `${l.italic ? 'italic ' : ''}${l.bold ? 700 : 400} ${fs}px ${fontCss(l.font)}`;
   ctx.font = font;
   const lines = (l.text || ' ').split('\n');
@@ -515,20 +516,37 @@ function textGeom(ctx, l, W, H) {
   const asc = m.fontBoundingBoxAscent ?? fs * 0.8;
   const desc = m.fontBoundingBoxDescent ?? fs * 0.2;
   const lh = fs * 1.2;
-  const cx = l.x * W, cy = l.y * H;
+  const cx = pl.x * W, cy = pl.y * H;
   const h = lines.length * lh;
   const top = cy - h / 2;
   return { fs, font, lines, maxW, lh, asc, desc, cx, cy, top, unit: fs, box: { x: cx - maxW / 2, y: top, w: maxW, h } };
 }
 
-function imageGeom(l, W, H) {
-  const w = Math.max(1, l.size * W);
+function imageGeom(l, pl, W, H) {
+  const w = Math.max(1, pl.size * W);
   const h = w * l.aspect;
-  return { w, h, x: l.x * W - w / 2, y: l.y * H - h / 2, unit: w / 5, box: { x: l.x * W - w / 2, y: l.y * H - h / 2, w, h } };
+  const x = pl.x * W - w / 2, y = pl.y * H - h / 2;
+  return { w, h, x, y, unit: w / 5, box: { x, y, w, h } };
 }
 
-function layerGeom(ctx, l, W, H) {
-  return l.type === 'text' ? textGeom(ctx, l, W, H) : imageGeom(l, W, H);
+/*
+ * Placement (x, y, size) is shared by every output size while a layer is
+ * linked. Unlinked layers keep a per-target override in l.pos, falling back to
+ * the shared placement for targets that haven't been adjusted yet.
+ */
+function place(l, tid) {
+  return (!l.linked && l.pos && l.pos[tid]) || l;
+}
+
+function setPlace(l, tid, changes) {
+  if (l.linked) { Object.assign(l, changes); return; }
+  const cur = place(l, tid);
+  l.pos = { ...l.pos, [tid]: { x: cur.x, y: cur.y, size: cur.size, ...changes } };
+}
+
+function layerGeom(ctx, l, W, H, tid) {
+  const pl = place(l, tid);
+  return l.type === 'text' ? textGeom(ctx, l, pl, W, H) : imageGeom(l, pl, W, H);
 }
 
 function drawTextLines(ctx, g, l, dx, dy, fill, stroke) {
@@ -593,8 +611,8 @@ function getScratch(W, H) {
   return ctx;
 }
 
-function drawLayer(ctx, l, W, H) {
-  const g = layerGeom(ctx, l, W, H);
+function drawLayer(ctx, l, W, H, tid) {
+  const g = layerGeom(ctx, l, W, H, tid);
   const u = g.unit;
 
   // Background box sits under the text, unaffected by the other effects.
@@ -656,10 +674,10 @@ function drawLayer(ctx, l, W, H) {
   ctx.restore();
 }
 
-function drawLayers(ctx, layers, W, H) {
+function drawLayers(ctx, layers, W, H, tid) {
   for (const l of layers) {
     if (l.type === 'image' && !l.img) continue;
-    drawLayer(ctx, l, W, H);
+    drawLayer(ctx, l, W, H, tid);
   }
 }
 
@@ -691,7 +709,7 @@ const TEXT_STYLE_KEYS = ['font', 'color', 'bold', 'italic', 'align', ...Object.k
 function newTextLayer() {
   const saved = store.get('textStyle', {});
   const l = {
-    id: ++seq, type: 'text', text: 'Your text', x: 0.5, y: 0.82, size: 0.09, opacity: 1,
+    id: ++seq, type: 'text', text: 'Your text', x: 0.5, y: 0.82, size: 0.09, opacity: 1, linked: true, pos: {},
     font: 'system-ui', color: '#ffffff', bold: true, italic: false, align: 'center',
     ...EFFECT_DEFAULTS, shadow: true,
   };
@@ -707,7 +725,9 @@ function rememberTextStyle(l) {
 }
 
 function cloneLayer(l) {
-  return { ...l, id: ++seq };
+  const pos = {};
+  for (const [k, v] of Object.entries(l.pos || {})) pos[k] = { ...v };
+  return { ...l, id: ++seq, pos };
 }
 
 $('addTextBtn').addEventListener('click', () => {
@@ -732,7 +752,7 @@ $('overlayInput').addEventListener('change', async (e) => {
     const iw = img.naturalWidth || 300, ih = img.naturalHeight || 300;
     const l = {
       id: ++seq, type: 'image', name: file.name, img, url, aspect: ih / iw,
-      x: 0.8, y: 0.8, size: 0.25, opacity: 1, ...EFFECT_DEFAULTS,
+      x: 0.8, y: 0.8, size: 0.25, opacity: 1, linked: true, pos: {}, ...EFFECT_DEFAULTS,
     };
     p.layers.push(l);
     state.sel = l;
@@ -821,7 +841,7 @@ function redraw() {
   const W = frameCanvas.width, H = frameCanvas.height;
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(bgCanvas, 0, 0);
-  drawLayers(ctx, p.layers, W, H);
+  drawLayers(ctx, p.layers, W, H, state.activeTarget);
   updateSelBox();
 }
 
@@ -831,7 +851,7 @@ function updateSelBox() {
   if (!l || !state.activePhoto.layers.includes(l)) { box.hidden = true; return; }
   const ctx = frameCanvas.getContext('2d');
   const W = frameCanvas.width, H = frameCanvas.height;
-  const b = layerGeom(ctx, l, W, H).box;
+  const b = layerGeom(ctx, l, W, H, state.activeTarget).box;
   const k = frameCss.w / W;
   box.hidden = false;
   box.style.left = b.x * k + 'px';
@@ -849,7 +869,7 @@ function hitTest(px, py) {
   for (let i = p.layers.length - 1; i >= 0; i--) {
     const l = p.layers[i];
     if (l.type === 'image' && !l.img) continue;
-    const b = layerGeom(ctx, l, W, H).box;
+    const b = layerGeom(ctx, l, W, H, state.activeTarget).box;
     if (x >= b.x - slop && x <= b.x + b.w + slop && y >= b.y - slop && y <= b.y + b.h + slop) return l;
   }
   return null;
@@ -864,13 +884,15 @@ frame.addEventListener('pointerdown', (e) => {
 
   if (e.target === $('selHandle') && state.sel) {
     const l = state.sel;
-    const cx = l.x * rect.width, cy = l.y * rect.height;
-    drag = { type: 'resize', l, cx, cy, d0: Math.hypot(px - cx, py - cy) || 1, s0: l.size };
+    const pl = place(l, state.activeTarget);
+    const cx = pl.x * rect.width, cy = pl.y * rect.height;
+    drag = { type: 'resize', l, cx, cy, d0: Math.hypot(px - cx, py - cy) || 1, s0: pl.size };
   } else {
     const l = hitTest(px, py);
     if (l !== state.sel) { state.sel = l; renderPanel(); }
     if (!l) { redraw(); return; }
-    drag = { type: 'move', l, px, py, x0: l.x, y0: l.y, w: rect.width, h: rect.height };
+    const pl = place(l, state.activeTarget);
+    drag = { type: 'move', l, px, py, x0: pl.x, y0: pl.y, w: rect.width, h: rect.height };
     redraw();
   }
   frame.setPointerCapture(e.pointerId);
@@ -893,10 +915,10 @@ frame.addEventListener('pointermove', (e) => {
     if (snapY) y = 0.5;
     $('guideV').hidden = !snapX;
     $('guideH').hidden = !snapY;
-    l.x = x; l.y = y;
+    setPlace(l, state.activeTarget, { x, y });
   } else {
     const d = Math.hypot(px - drag.cx, py - drag.cy);
-    l.size = clamp(drag.s0 * d / drag.d0, 0.01, 1.5);
+    setPlace(l, state.activeTarget, { size: clamp(drag.s0 * d / drag.d0, 0.01, 1.5) });
     syncSizeSlider();
   }
   scheduleRedraw();
@@ -926,8 +948,8 @@ document.addEventListener('keydown', (e) => {
     removeLayer(l);
     e.preventDefault();
   } else if (moves[e.key]) {
-    l.x = clamp(l.x + moves[e.key][0], 0, 1);
-    l.y = clamp(l.y + moves[e.key][1], 0, 1);
+    const pl = place(l, state.activeTarget);
+    setPlace(l, state.activeTarget, { x: clamp(pl.x + moves[e.key][0], 0, 1), y: clamp(pl.y + moves[e.key][1], 0, 1) });
     scheduleRedraw();
     e.preventDefault();
   }
@@ -1031,10 +1053,34 @@ function el(tag, attrs = {}, children = []) {
 
 function slider(l, key, label, min, max, step) {
   const input = el('input', { type: 'range', min, max, step });
-  input.value = l[key];
+  const isPlace = key === 'size';
+  input.value = isPlace ? place(l, state.activeTarget)[key] : l[key];
   input.dataset.key = key;
-  input.addEventListener('input', () => { l[key] = parseFloat(input.value); onLayerChange(l); });
+  input.addEventListener('input', () => {
+    const v = parseFloat(input.value);
+    if (isPlace) setPlace(l, state.activeTarget, { [key]: v });
+    else l[key] = v;
+    onLayerChange(l);
+  });
   return el('label', { class: 'slider' }, [el('span', {}, label), input]);
+}
+
+function linkRow(l) {
+  const input = el('input', { type: 'checkbox' });
+  input.checked = l.linked;
+  input.addEventListener('change', () => {
+    if (input.checked) {
+      // Re-linking adopts the placement of the size currently on screen.
+      const pl = place(l, state.activeTarget);
+      Object.assign(l, { x: pl.x, y: pl.y, size: pl.size, linked: true, pos: {} });
+    } else {
+      l.linked = false;
+    }
+    onLayerChange(l);
+  });
+  return el('label', { class: 'switch link-row', title: 'Off: move and resize separately for each size' }, [
+    input, el('span', { class: 'track', html: '<span class="thumb"></span>' }), el('span', {}, 'Same position on all sizes'),
+  ]);
 }
 
 function colorInput(l, key, title) {
@@ -1065,7 +1111,7 @@ function fxSection(l, key, label, colorKey, sliders) {
 
 function syncSizeSlider() {
   const s = $('props').querySelector('input[data-key="size"]');
-  if (s && state.sel) s.value = state.sel.size;
+  if (s && state.sel) s.value = place(state.sel, state.activeTarget).size;
 }
 
 function renderProps() {
@@ -1120,12 +1166,14 @@ function renderProps() {
       colorInput(l, 'color', 'Text color'),
     ]));
 
+    props.append(linkRow(l));
     props.append(slider(l, 'size', 'Size', 0.01, 0.4, 0.001));
     props.append(slider(l, 'opacity', 'Opacity', 0.05, 1, 0.01));
 
     props.append(el('div', { class: 'presets' }, PRESETS.map(pr =>
       el('button', { class: 'preset', title: pr.name, html: `<span style="${pr.css}">Aa</span>`, onclick: () => { Object.assign(l, pr.set); onLayerChange(l, true); } }))));
   } else {
+    props.append(linkRow(l));
     props.append(slider(l, 'size', 'Size', 0.02, 1.2, 0.001));
     props.append(slider(l, 'opacity', 'Opacity', 0.05, 1, 0.01));
   }
@@ -1178,7 +1226,7 @@ function renderOutput(p, t) {
   ctx.fillRect(0, 0, w, h);
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
-  drawLayers(ctx, p.layers, w, h);
+  drawLayers(ctx, p.layers, w, h, t.id);
   return new Promise((resolve, reject) =>
     out.toBlob(b => b ? resolve(b) : reject(new Error('encode failed')), 'image/jpeg', JPEG_QUALITY));
 }
