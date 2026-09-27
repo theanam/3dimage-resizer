@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Submit Resizer</title>
+  <meta name="description" content="Crop and resize photos for Thingiverse, Printables and MakerWorld. Runs entirely in your browser.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    try {
+      const t = localStorage.getItem('theme');
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="favicon.svg" alt="" width="28" height="28">
+      <span>3D Submit <b>Resizer</b></span>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="helpBtn" title="Help" aria-label="Help">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.2-2.5 3.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.1" fill="currentColor"/></svg>
+      </button>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle light/dark mode">
+        <svg class="i-sun" viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><g stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></g></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" width="20" height="20"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Empty state -->
+    <section id="dropView" class="drop-view">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple hidden>
+        <div class="drop-icon">
+          <svg viewBox="0 0 48 48" width="56" height="56"><path d="M24 6 40 15v18L24 42 8 33V15Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 15l16 9 16-9M24 24v18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" opacity=".45"/></svg>
+        </div>
+        <h1>Drop photos here</h1>
+        <p>or <span class="link">browse</span> &middot; JPG, PNG, HEIC, WebP</p>
+      </label>
+      <div class="platform-row">
+        <span><i class="dot" style="--c:var(--tv)"></i>Thingiverse</span>
+        <span><i class="dot" style="--c:var(--pr)"></i>Printables</span>
+        <span><i class="dot" style="--c:var(--mw)"></i>MakerWorld</span>
+      </div>
+    </section>
+
+    <!-- Workspace -->
+    <section id="workView" class="work-view" hidden>
+      <div class="toolbar">
+        <div class="targets" id="targets"></div>
+        <div class="toolbar-right">
+          <label class="switch" title="Crops with the same ratio move together">
+            <input type="checkbox" id="linkToggle" checked>
+            <span class="track"><span class="thumb"></span></span>
+            <span>Link same ratios</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="workspace">
+        <aside class="photos">
+          <div class="photos-list" id="photoList"></div>
+          <label class="add-more" title="Add photos">
+            <input type="file" id="fileInput2" accept="image/*,.heic,.heif" multiple hidden>
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </label>
+        </aside>
+
+        <div class="editor">
+          <div class="variant-tabs" id="variantTabs"></div>
+          <div class="stage" id="stage">
+            <img id="cropImg" alt="">
+          </div>
+          <div class="editor-foot">
+            <span class="meta" id="meta"></span>
+            <div class="foot-actions">
+              <button class="btn ghost sm" id="resetBtn">Reset crop</button>
+              <button class="btn ghost sm danger" id="removeBtn">Remove photo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actionbar">
+        <span class="summary" id="summary"></span>
+        <button class="btn primary" id="doneBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Done &middot; Download zip</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <div class="busy" id="busy" hidden>
+    <div class="busy-card"><div class="spinner"></div><span id="busyText">Working…</span></div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <dialog id="helpDialog" class="dialog">
+    <form method="dialog" class="dialog-inner">
+      <button class="icon-btn close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <h2>About</h2>
+      <p>Crop and resize photos for 3D model sites in one go. Everything happens in your browser. Nothing gets uploaded.</p>
+      <table class="spec">
+        <thead><tr><th>Output</th><th>Ratio</th><th>Max size</th></tr></thead>
+        <tbody id="specRows"></tbody>
+      </table>
+      <p class="muted">JPEG output, quality 88. Small photos are never upscaled.</p>
+      <div class="help-links">
+        <a class="btn ghost sm" href="https://github.com/theanam/3dimage-resizer/issues" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.3 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+          Feature requests &amp; issues
+        </a>
+        <a class="btn ghost sm" href="mailto:anam.ahmed.a@gmail.com">
+          <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          anam.ahmed.a@gmail.com
+        </a>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
