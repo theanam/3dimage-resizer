@@ -26,6 +26,26 @@ jobs:
         run: |
           mkdir _site
           cp index.html styles.css app.js favicon.svg _site/
+      - name: Inject analytics (Pages build only)
+        run: |
+          cat > gtag.html <<'EOF'
+          <!-- Google tag (gtag.js) -->
+          <script async src="https://www.googletagmanager.com/gtag/js?id=G-7J199325JZ"></script>
+          <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-7J199325JZ');
+          </script>
+          EOF
+          python3 - <<'EOF'
+          p = '_site/index.html'
+          s = open(p).read()
+          tag = open('gtag.html').read()
+          assert '</head>' in s
+          open(p, 'w').write(s.replace('</head>', tag + '</head>', 1))
+          EOF
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
