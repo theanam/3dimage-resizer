@@ -142,15 +142,156 @@ async function decodeFile(file) {
 }
 
 function makePreview(img) {
-  const s = Math.min(1, PREVIEW_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const s = Math.min(1, PREVIEW_MAX / Math.max(iw, ih));
   const c = document.createElement('canvas');
-  c.width = Math.round(img.naturalWidth * s);
-  c.height = Math.round(img.naturalHeight * s);
+  c.width = Math.round(iw * s);
+  c.height = Math.round(ih * s);
   const ctx = c.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, c.width, c.height);
   return { canvas: c, scale: s };
 }
+
+/* ---------------- Straighten ---------------- */
+/*
+ * A straightened photo is the original rotated by p.angle and trimmed to the
+ * largest upright rectangle inside it, so there are never blank corners. That
+ * copy replaces p.img/w/h/preview/url, so cropping, overlays, collages and
+ * export all work on it unchanged; the original is kept in p.orig.
+ */
+const MAX_CANVAS_AREA = 16e6; // stays under iOS Safari's canvas size limit
+
+function inscribedRect(w, h, a) {
+  const sin = Math.abs(Math.sin(a)), cos = Math.abs(Math.cos(a));
+  if (sin < 1e-9) return [w, h];
+  const long = Math.max(w, h), short = Math.min(w, h);
+  if (short <= 2 * sin * cos * long || Math.abs(sin - cos) < 1e-10) {
+    const x = short / 2;
+    return w >= h ? [x / sin, x / cos] : [x / cos, x / sin];
+  }
+  const cos2 = cos * cos - sin * sin;
+  return [(w * cos - h * sin) / cos2, (h * cos - w * sin) / cos2];
+}
+
+// Crops survive a re-straighten by keeping their centre and relative width.
+function relativeCrops(p) {
+  return Object.entries(p.crops).map(([id, r]) => ({ id, cx: (r.x + r.width / 2) / p.w, cy: (r.y + r.height / 2) / p.h, fw: r.width / p.w }));
+}
+
+function restoreCrops(p, rel) {
+  p.crops = {};
+  for (const { id, cx, cy, fw } of rel) {
+    const t = byId(id);
+    let w = fw * p.w, h = w * t.rh / t.rw;
+    if (h > p.h) { h = p.h; w = h * t.rw / t.rh; }
+    if (w > p.w) { w = p.w; h = w * t.rh / t.rw; }
+    p.crops[id] = { x: clamp(cx * p.w - w / 2, 0, p.w - w), y: clamp(cy * p.h - h / 2, 0, p.h - h), width: w, height: h };
+  }
+}
+
+async function applyAngle(p, angle) {
+  if (!p.orig) p.orig = { img: p.img, w: p.w, h: p.h, preview: p.preview, url: p.url };
+  const o = p.orig;
+  const rel = relativeCrops(p);
+  if (p.url && p.url !== o.url) URL.revokeObjectURL(p.url);
+  if (Math.abs(angle) < 0.05) {
+    Object.assign(p, { angle: 0, img: o.img, w: o.w, h: o.h, preview: o.preview, url: o.url });
+  } else {
+    const a = angle * Math.PI / 180;
+    const [rw, rh] = inscribedRect(o.w, o.h, a);
+    const k = Math.min(1, Math.sqrt(MAX_CANVAS_AREA / (rw * rh)));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.floor(rw * k));
+    c.height = Math.max(1, Math.floor(rh * k));
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate(a);
+    ctx.scale(k, k);
+    ctx.drawImage(o.img, -o.w / 2, -o.h / 2);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.95));
+    Object.assign(p, { angle, img: c, w: c.width, h: c.height, preview: makePreview(c), url: URL.createObjectURL(blob) });
+  }
+  p.thumb = p.preview.canvas.toDataURL('image/jpeg', 0.7);
+  restoreCrops(p, rel);
+  for (const c of state.photos) if (c.kind === 'collage' && c.sources.includes(p)) updateCollageThumb(c);
+}
+
+// Live preview while dragging: the whole rotated photo, with the part that
+// will be trimmed dimmed and a grid to line up against.
+function drawStraightenPreview(p, angle) {
+  const cv = $('straightenPreview');
+  const stage = $('stage');
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.round(stage.clientWidth * dpr), H = Math.round(stage.clientHeight * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  cv.hidden = false;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const o = p.orig || p;
+  const a = angle * Math.PI / 180;
+  const sin = Math.abs(Math.sin(a)), cos = Math.abs(Math.cos(a));
+  const k = Math.min(W / (o.w * cos + o.h * sin), H / (o.w * sin + o.h * cos)) * 0.92;
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(a);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(o.preview.canvas, -o.w * k / 2, -o.h * k / 2, o.w * k, o.h * k);
+  ctx.restore();
+  const [rw, rh] = inscribedRect(o.w, o.h, a);
+  const cw = rw * k, ch = rh * k, x0 = (W - cw) / 2, y0 = (H - ch) / 2;
+  ctx.fillStyle = 'rgba(0, 0, 0, .6)';
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.rect(x0, y0, cw, ch);
+  ctx.fill('evenodd');
+  ctx.strokeStyle = 'rgba(255, 255, 255, .4)';
+  ctx.lineWidth = dpr;
+  ctx.beginPath();
+  for (let i = 1; i < 8; i++) {
+    ctx.moveTo(x0 + cw * i / 8, y0); ctx.lineTo(x0 + cw * i / 8, y0 + ch);
+    ctx.moveTo(x0, y0 + ch * i / 8); ctx.lineTo(x0 + cw, y0 + ch * i / 8);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5 * dpr;
+  ctx.strokeRect(x0, y0, cw, ch);
+}
+
+const angleInput = $('angleInput');
+function syncAngleUI() {
+  const a = state.activePhoto?.angle || 0;
+  angleInput.value = a;
+  $('angleVal').textContent = `${a.toFixed(1)}°`;
+  $('straighten').classList.toggle('changed', a !== 0);
+}
+
+let angleQueue = Promise.resolve();
+function commitAngle(angle) {
+  const p = state.activePhoto;
+  if (!p || p.loading || p.kind === 'collage') return;
+  angleQueue = angleQueue.then(async () => {
+    if ((p.angle || 0) !== angle) await applyAngle(p, angle);
+    if (state.activePhoto !== p) return;
+    $('straightenPreview').hidden = true;
+    syncAngleUI();
+    renderPhotos();
+    renderTabs();
+    mountCropper();
+    updateMeta();
+  });
+}
+
+angleInput.addEventListener('input', () => {
+  const p = state.activePhoto;
+  if (!p || p.loading || p.kind === 'collage') return;
+  const a = parseFloat(angleInput.value);
+  $('angleVal').textContent = `${a.toFixed(1)}°`;
+  drawStraightenPreview(p, a);
+});
+angleInput.addEventListener('change', () => commitAngle(parseFloat(angleInput.value)));
+$('straighten').addEventListener('dblclick', () => { angleInput.value = 0; commitAngle(0); });
 
 function autoCrop(photo, t) {
   const W = photo.w, H = photo.h;
@@ -462,6 +603,8 @@ function applyView() {
   $('panel').hidden = !overlay;
   $('collagePanel').hidden = !collage;
   $('resetBtn').hidden = overlay;
+  $('straighten').hidden = overlay || collage;
+  $('straightenPreview').hidden = true;
   $('overlayStage').classList.toggle('collage-edit', collage);
 }
 
@@ -481,6 +624,7 @@ function selectPhoto(photo) {
   renderPhotos();
   renderTabs();
   showCurrent();
+  syncAngleUI();
   updateMeta();
 }
 
@@ -658,7 +802,10 @@ function inUse(photo) {
 
 function releaseImages(p) {
   for (const x of p.kind === 'collage' ? p.sources : [p]) {
-    if (x.url && !inUse(x)) { URL.revokeObjectURL(x.url); x.url = null; }
+    if (inUse(x)) continue;
+    if (x.url) URL.revokeObjectURL(x.url);
+    if (x.orig?.url && x.orig.url !== x.url) URL.revokeObjectURL(x.orig.url);
+    x.url = null;
   }
 }
 

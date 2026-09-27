@@ -640,6 +640,31 @@ main {
 .fx:not(.on) .fx-body, .fx:not(.on) .fx-head .swatch { display: none; }
 .fx .switch .track { flex: none; }
 
+/* ---------- Straighten ---------- */
+.straighten {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 8px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.straighten input { width: 140px; accent-color: var(--accent); }
+.straighten span { min-width: 40px; text-align: right; }
+.straighten.changed { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.straighten-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  background: var(--stage);
+}
+
 /* ---------- Collage ---------- */
 button.add-more { background: none; font: inherit; padding: 0; }
 .thumb-btn .badge {
@@ -881,6 +906,9 @@ button.add-more { background: none; font: inherit; padding: 0; }
   .editor-head { flex-wrap: wrap; padding: 0 0 10px; }
   .editor-head .seg { margin-left: 10px; }
   .editor-body { flex-direction: column; }
+  .foot-actions { flex-wrap: wrap; width: 100%; }
+  .straighten { flex: 1 1 100%; }
+  .straighten input { flex: 1; width: auto; }
   .editor-body > .stage { flex: none; height: 52vh; }
   .variant-tabs { flex-basis: 100%; }
   .panel { width: auto; border-left: 0; border-top: 1px solid var(--line); }

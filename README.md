@@ -8,6 +8,7 @@ Crop and resize photos for **Thingiverse**, **Printables** and **MakerWorld** in
 
 - Opens JPG, PNG, WebP and HEIC
 - Pick which sites and variants you need; each gets an auto crop you can adjust
+- Straighten tilted shots (±45°) without blank corners
 - Combine 2–4 photos into a collage whose layout adapts to each size (or pick a fixed one)
 - Overlay text and images (logos, badges): system fonts, style presets, outline, shadow/glow, 3D extrusion, background box
 - Exports a zip of JPEGs (quality 88, max 1600px on the long edge, never upscaled)

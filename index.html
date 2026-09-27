@@ -152,6 +152,7 @@
           <div class="editor-body" id="editorBody">
             <div class="stage" id="stage">
               <img id="cropImg" alt="">
+              <canvas class="straighten-preview" id="straightenPreview" hidden></canvas>
             </div>
             <div class="stage overlay-stage" id="overlayStage" hidden>
               <div class="frame" id="frame">
@@ -187,6 +188,11 @@
           <div class="editor-foot">
             <span class="meta" id="meta"></span>
             <div class="foot-actions">
+              <label class="straighten" id="straighten" title="Straighten (double-click to reset)">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 17 21 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".45"/></svg>
+                <input type="range" id="angleInput" min="-45" max="45" step="0.1" value="0" aria-label="Straighten angle">
+                <span id="angleVal">0.0°</span>
+              </label>
               <button class="btn ghost sm" id="resetBtn" title="Back to the automatic crop">Reset crop</button>
               <button class="btn ghost sm danger" id="removeBtn" title="Delete this item from the set">Delete</button>
             </div>
