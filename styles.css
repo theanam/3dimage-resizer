@@ -1,48 +1,55 @@
 :root {
-  --bg: #f5f4f1;
-  --bg-2: #ecebe7;
+  --bg: #f3f5f3;
+  --bg-2: #e7ebe8;
   --panel: #ffffff;
-  --panel-2: #f8f7f5;
-  --line: #e3e1dc;
-  --text: #1b1a18;
-  --muted: #76726b;
-  --accent: #ff5a36;
-  --accent-2: #ff8a3d;
+  --panel-2: #f7f9f7;
+  --line: #dce2de;
+  --text: #151a17;
+  --muted: #6a746e;
+  --accent: #00ae42;
+  --accent-2: #2fcc68;
+  --accent-strong: #008f36;
   --accent-ink: #ffffff;
-  --stage: #e9e7e2;
+  --stage: #e3e8e4;
   --danger: #d9363e;
   --tv: #248bfb;
   --pr: #fa6831;
   --mw: #00ae42;
-  --shadow: 0 1px 2px rgba(20, 18, 14, .06), 0 8px 24px rgba(20, 18, 14, .06);
+  --shadow: 0 1px 2px rgba(10, 30, 18, .06), 0 8px 24px rgba(10, 30, 18, .06);
   --radius: 14px;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e0f12;
-    --bg-2: #15171b;
-    --panel: #17191e;
-    --panel-2: #1d2026;
-    --line: #2a2d34;
-    --text: #eceae6;
-    --muted: #8f939c;
-    --stage: #0a0b0d;
+    --bg: #0b0e0c;
+    --bg-2: #121714;
+    --panel: #151a17;
+    --panel-2: #1a211d;
+    --line: #253029;
+    --text: #e8eee9;
+    --muted: #8a968e;
+    --accent: #1ec45c;
+    --accent-2: #3ddc78;
+    --accent-strong: #00a33d;
+    --stage: #070908;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0e0f12;
-  --bg-2: #15171b;
-  --panel: #17191e;
-  --panel-2: #1d2026;
-  --line: #2a2d34;
-  --text: #eceae6;
-  --muted: #8f939c;
-  --stage: #0a0b0d;
+  --bg: #0b0e0c;
+  --bg-2: #121714;
+  --panel: #151a17;
+  --panel-2: #1a211d;
+  --line: #253029;
+  --text: #e8eee9;
+  --muted: #8a968e;
+  --accent: #1ec45c;
+  --accent-2: #3ddc78;
+  --accent-strong: #00a33d;
+  --stage: #070908;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
   color-scheme: dark;
 }
@@ -456,7 +463,7 @@ main {
   user-select: none;
 }
 .frame canvas { display: block; width: 100%; height: 100%; }
-.guide { position: absolute; background: #ff3df0; pointer-events: none; }
+.guide { position: absolute; background: var(--accent-2); pointer-events: none; }
 .guide.gv { top: 0; bottom: 0; left: 50%; width: 1px; }
 .guide.gh { left: 0; right: 0; top: 50%; height: 1px; }
 .sel-box {
@@ -631,7 +638,7 @@ main {
 }
 .btn:active { transform: scale(.98); }
 .btn.primary {
-  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  background: linear-gradient(135deg, var(--accent-2), var(--accent-strong));
   color: var(--accent-ink);
   box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--accent) 70%, transparent);
 }
